@@ -1,0 +1,528 @@
+{% extends "base.html" %}
+
+{% block titulo %}Gestão de Taxas - SINT-IFESGO{% endblock %}
+
+{% block conteudo %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h2>Gestão de Taxas e Pagamentos</h2>
+    <div style="display: flex; gap: 10px;">
+        <button class="btn" onclick="gerarRelatorio()" style="background-color: #17a2b8;">
+            Gerar Relatório
+        </button>
+        <button class="btn" onclick="verificarVencimentos()" style="background-color: #ffc107; color: #000;">
+            Verificar Vencimentos
+        </button>
+    </div>
+</div>
+
+<!-- Estatísticas Financeiras -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
+    <div style="background: linear-gradient(135deg, #28a745, #20c997); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+        <h3 style="margin: 0; font-size: 1.8em;">R$ {{ "{:.2f}".format(estatisticas.total_recebido or 0) | replace('.', ',') }}</h3>
+        <p style="margin: 5px 0 0 0;">Total Arrecadado</p>
+    </div>
+    <div style="background: linear-gradient(135deg, #ffc107, #fd7e14); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+        <h3 style="margin: 0; font-size: 1.8em;">R$ {{ "{:.2f}".format(estatisticas.total_pendente or 0) | replace('.', ',') }}</h3>
+        <p style="margin: 5px 0 0 0;">Pendente de Pagamento</p>
+    </div>
+    <div style="background: linear-gradient(135deg, #dc3545, #e83e8c); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+        <h3 style="margin: 0; font-size: 1.8em;">R$ {{ "{:.2f}".format(estatisticas.total_vencido or 0) | replace('.', ',') }}</h3>
+        <p style="margin: 5px 0 0 0;">Vencido</p>
+    </div>
+    <div style="background: linear-gradient(135deg, #007bff, #6f42c1); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+        <h3 style="margin: 0; font-size: 1.8em;">{{ estatisticas.total_taxas or 0 }}</h3>
+        <p style="margin: 5px 0 0 0;">Total de Taxas</p>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 30px;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+        <div>
+            <label>Buscar por código ou CPF:</label>
+            <input type="text" id="busca-taxa" onkeyup="filtrarTaxas()" placeholder="Digite código ou CPF...">
+        </div>
+        <div>
+            <label>Status:</label>
+            <select id="filtro-status" onchange="filtrarTaxas()">
+                <option value="">Todos</option>
+                <option value="pendente">Pendente</option>
+                <option value="pago">Pago</option>
+                <option value="vencido">Vencido</option>
+                <option value="cancelado">Cancelado</option>
+            </select>
+        </div>
+        <div>
+            <label>Tipo:</label>
+            <select id="filtro-tipo" onchange="filtrarTaxas()">
+                <option value="">Todos</option>
+                <option value="reserva">Taxa de Reserva</option>
+                <option value="sindical">Taxa Sindical</option>
+            </select>
+        </div>
+        <div>
+            <label>Período:</label>
+            <select id="filtro-periodo" onchange="filtrarPorPeriodo()">
+                <option value="">Todos</option>
+                <option value="hoje">Hoje</option>
+                <option value="semana">Esta Semana</option>
+                <option value="mes">Este Mês</option>
+                <option value="vencidas">Vencidas</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- Tabela de Taxas -->
+<div style="overflow-x: auto; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background-color: #2c5234; color: white;">
+                <th style="padding: 15px; text-align: left;">Código</th>
+                <th style="padding: 15px; text-align: left;">Associado</th>
+                <th style="padding: 15px; text-align: left;">Tipo</th>
+                <th style="padding: 15px; text-align: right;">Valor</th>
+                <th style="padding: 15px; text-align: center;">Status</th>
+                <th style="padding: 15px; text-align: center;">Vencimento</th>
+                <th style="padding: 15px; text-align: center;">Pagamento</th>
+                <th style="padding: 15px; text-align: center;">Ações</th>
+            </tr>
+        </thead>
+        <tbody id="tabela-taxas">
+            {% if taxas %}
+                {% for taxa in taxas %}
+                <tr class="linha-taxa" 
+                    data-codigo="{{ taxa.codigo_pagamento | lower }}" 
+                    data-cpf="{{ taxa.associado_cpf }}"
+                    data-status="{{ taxa.status }}"
+                    data-tipo="{{ taxa.tipo }}"
+                    data-vencimento="{{ taxa.data_vencimento.isoformat() if taxa.data_vencimento else '' }}">
+                    <td style="padding: 15px; font-family: monospace; font-weight: bold; color: #2c5234;">
+                        {{ taxa.codigo_pagamento }}
+                    </td>
+                    <td style="padding: 15px;">
+                        {% if taxa.associado_obj %}
+                            <strong>{{ taxa.associado_obj.nome }}</strong><br>
+                            <small style="color: #666;">{{ taxa.associado_obj.cpf_formatado }}</small>
+                        {% else %}
+                            <span style="color: #999;">Associado não encontrado</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 15px;">
+                        <span class="tipo-badge tipo-{{ taxa.tipo }}">
+                            {{ 'Taxa de Reserva' if taxa.tipo == 'reserva' else 'Taxa Sindical' }}
+                        </span>
+                    </td>
+                    <td style="padding: 15px; text-align: right; font-weight: bold; font-size: 1.1em;">
+                        {{ taxa.valor_formatado() }}
+                    </td>
+                    <td style="padding: 15px; text-align: center;">
+                        <span class="status-badge status-{{ taxa.status }}">
+                            {{ taxa._get_status_display() }}
+                        </span>
+                    </td>
+                    <td style="padding: 15px; text-align: center;">
+                        {% if taxa.data_vencimento %}
+                            <span style="color: {{ 'red' if taxa.is_vencida() else 'inherit' }};">
+                                {{ taxa.data_vencimento.strftime('%d/%m/%Y') }}
+                            </span>
+                        {% else %}
+                            <span style="color: #999;">-</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 15px; text-align: center;">
+                        {% if taxa.data_pagamento %}
+                            {{ taxa.data_pagamento.strftime('%d/%m/%Y %H:%M') }}
+                        {% else %}
+                            <span style="color: #999;">-</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 15px; text-align: center;">
+                        <div style="display: flex; gap: 5px; justify-content: center; flex-wrap: wrap;">
+                            {% if taxa.status == 'pendente' %}
+                            <button class="btn btn-sm" onclick="confirmarPagamento('{{ taxa.codigo_pagamento }}')" 
+                                    style="background-color: #28a745; padding: 5px 10px;">
+                                Confirmar
+                            </button>
+                            <button class="btn btn-sm" onclick="cancelarTaxa('{{ taxa.id }}')" 
+                                    style="background-color: #dc3545; padding: 5px 10px;">
+                                Cancelar
+                            </button>
+                            {% endif %}
+                            <button class="btn btn-sm" onclick="verDetalhesTaxa({{ taxa.id }})" 
+                                    style="background-color: #17a2b8; padding: 5px 10px;">
+                                Detalhes
+                            </button>
+                            {% if taxa.status == 'pago' %}
+                            <button class="btn btn-sm" onclick="gerarComprovante({{ taxa.id }})" 
+                                    style="background-color: #6c757d; padding: 5px 10px;">
+                                Comprovante
+                            </button>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="8" style="padding: 50px; text-align: center; color: #666;">
+                        Nenhuma taxa encontrada.
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal de Detalhes da Taxa -->
+<div id="modal-detalhes-taxa" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto;">
+        <h3>Detalhes da Taxa</h3>
+        <div id="conteudo-detalhes-taxa"></div>
+        <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+            <button class="btn btn-secondary" onclick="fecharModalDetalhesTaxa()">Fechar</button>
+            <div id="acoes-taxa"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmação de Pagamento -->
+<div id="modal-confirmar-pagamento" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 500px;">
+        <h3>Confirmar Pagamento</h3>
+        
+        <form id="form-confirmar-pagamento" onsubmit="processarConfirmacaoPagamento(event)">
+            <input type="hidden" id="codigo-confirmacao" name="codigo_pagamento">
+            
+            <div class="form-group">
+                <label for="forma-pagamento">Forma de Pagamento *</label>
+                <select id="forma-pagamento" name="forma_pagamento" required>
+                    <option value="">Selecione...</option>
+                    <option value="PIX">PIX</option>
+                    <option value="Transferência">Transferência Bancária</option>
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="Cartão">Cartão</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="observacoes-pagamento">Observações</label>
+                <textarea id="observacoes-pagamento" name="observacoes" rows="3" 
+                          placeholder="Informações adicionais sobre o pagamento..."></textarea>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                <button type="button" class="btn btn-secondary" onclick="fecharModalConfirmarPagamento()">Cancelar</button>
+                <button type="submit" class="btn" style="background-color: #28a745;">Confirmar Pagamento</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.status-badge {
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.status-pendente {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.status-pago {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.status-vencido {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.status-cancelado {
+    background-color: #e2e3e5;
+    color: #383d41;
+    border: 1px solid #d6d8db;
+}
+
+.tipo-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: bold;
+}
+
+.tipo-reserva {
+    background-color: #e7f3ff;
+    color: #0056b3;
+    border: 1px solid #b3d7ff;
+}
+
+.tipo-sindical {
+    background-color: #f3e5f5;
+    color: #6a1b9a;
+    border: 1px solid #ce93d8;
+}
+
+.btn-sm {
+    padding: 6px 10px;
+    font-size: 0.85em;
+    min-width: 80px;
+}
+
+.linha-taxa:hover {
+    background-color: #f8f9fa;
+}
+
+#busca-taxa {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+}
+</style>
+
+<script>
+// Função para filtrar taxas
+function filtrarTaxas() {
+    const busca = document.getElementById('busca-taxa').value.toLowerCase();
+    const filtroStatus = document.getElementById('filtro-status').value;
+    const filtroTipo = document.getElementById('filtro-tipo').value;
+    
+    const linhas = document.querySelectorAll('.linha-taxa');
+    
+    linhas.forEach(linha => {
+        let mostrar = true;
+        
+        // Filtro de busca por código ou CPF
+        if (busca) {
+            const codigo = linha.dataset.codigo;
+            const cpf = linha.dataset.cpf;
+            if (!codigo.includes(busca) && !cpf.includes(busca)) {
+                mostrar = false;
+            }
+        }
+        
+        // Filtro de status
+        if (filtroStatus && linha.dataset.status !== filtroStatus) {
+            mostrar = false;
+        }
+        
+        // Filtro de tipo
+        if (filtroTipo && linha.dataset.tipo !== filtroTipo) {
+            mostrar = false;
+        }
+        
+        linha.style.display = mostrar ? '' : 'none';
+    });
+}
+
+// Função para filtrar por período
+function filtrarPorPeriodo() {
+    const periodo = document.getElementById('filtro-periodo').value;
+    const linhas = document.querySelectorAll('.linha-taxa');
+    const hoje = new Date();
+    
+    linhas.forEach(linha => {
+        let mostrar = true;
+        
+        if (periodo) {
+            const vencimento = linha.dataset.vencimento ? new Date(linha.dataset.vencimento) : null;
+            
+            switch (periodo) {
+                case 'hoje':
+                    mostrar = vencimento && vencimento.toDateString() === hoje.toDateString();
+                    break;
+                case 'semana':
+                    const inicioSemana = new Date(hoje);
+                    inicioSemana.setDate(hoje.getDate() - hoje.getDay());
+                    const fimSemana = new Date(inicioSemana);
+                    fimSemana.setDate(inicioSemana.getDate() + 6);
+                    mostrar = vencimento && vencimento >= inicioSemana && vencimento <= fimSemana;
+                    break;
+                case 'mes':
+                    mostrar = vencimento && 
+                        vencimento.getMonth() === hoje.getMonth() && 
+                        vencimento.getFullYear() === hoje.getFullYear();
+                    break;
+                case 'vencidas':
+                    mostrar = vencimento && vencimento < hoje && linha.dataset.status === 'pendente';
+                    break;
+            }
+        }
+        
+        linha.style.display = mostrar ? '' : 'none';
+    });
+}
+
+// Função para confirmar pagamento
+function confirmarPagamento(codigo) {
+    document.getElementById('codigo-confirmacao').value = codigo;
+    document.getElementById('modal-confirmar-pagamento').style.display = 'block';
+}
+
+// Função para processar confirmação de pagamento
+function processarConfirmacaoPagamento(event) {
+    event.preventDefault();
+    
+    const formData = new FormData(event.target);
+    const dadosPagamento = Object.fromEntries(formData.entries());
+    
+    fetch('/api/taxa/confirmar-pagamento', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dadosPagamento)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert('Pagamento confirmado com sucesso!');
+            location.reload();
+        } else {
+            alert('Erro: ' + data.mensagem);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao confirmar pagamento');
+    });
+}
+
+// Função para cancelar taxa
+function cancelarTaxa(taxaId) {
+    if (confirm('Tem certeza que deseja cancelar esta taxa?')) {
+        fetch(`/api/taxa/cancelar/${taxaId}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.sucesso) {
+                alert('Taxa cancelada com sucesso');
+                location.reload();
+            } else {
+                alert('Erro: ' + data.mensagem);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao cancelar taxa');
+        });
+    }
+}
+
+// Função para ver detalhes da taxa
+function verDetalhesTaxa(taxaId) {
+    fetch(`/api/taxa/detalhes/${taxaId}`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            const taxa = data.taxa;
+            document.getElementById('conteudo-detalhes-taxa').innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                    <div>
+                        <h4>Informações da Taxa</h4>
+                        <p><strong>Código:</strong> ${taxa.codigo_pagamento}</p>
+                        <p><strong>Tipo:</strong> ${taxa.tipo === 'reserva' ? 'Taxa de Reserva' : 'Taxa Sindical'}</p>
+                        <p><strong>Valor:</strong> ${taxa.valor_formatado}</p>
+                        <p><strong>Status:</strong> <span class="status-badge status-${taxa.status}">${taxa.status_display}</span></p>
+                    </div>
+                    <div>
+                        <h4>Datas</h4>
+                        <p><strong>Gerada em:</strong> ${taxa.data_criacao}</p>
+                        <p><strong>Vencimento:</strong> ${taxa.data_vencimento || 'Não definido'}</p>
+                        <p><strong>Pagamento:</strong> ${taxa.data_pagamento || 'Não pago'}</p>
+                    </div>
+                </div>
+                ${taxa.observacoes ? `<div><h4>Observações</h4><p>${taxa.observacoes}</p></div>` : ''}
+            `;
+            
+            // Configurar ações disponíveis
+            let acoes = '';
+            if (taxa.status === 'pendente') {
+                acoes = `
+                    <button class="btn" onclick="confirmarPagamento('${taxa.codigo_pagamento}')" style="background-color: #28a745;">
+                        Confirmar Pagamento
+                    </button>
+                `;
+            } else if (taxa.status === 'pago') {
+                acoes = `
+                    <button class="btn" onclick="gerarComprovante(${taxa.id})" style="background-color: #6c757d;">
+                        Gerar Comprovante
+                    </button>
+                `;
+            }
+            document.getElementById('acoes-taxa').innerHTML = acoes;
+            
+            document.getElementById('modal-detalhes-taxa').style.display = 'block';
+        } else {
+            alert('Erro ao carregar detalhes da taxa');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao carregar detalhes');
+    });
+}
+
+// Função para gerar comprovante
+function gerarComprovante(taxaId) {
+    window.open(`/api/taxa/comprovante/${taxaId}`, '_blank');
+}
+
+// Função para gerar relatório
+function gerarRelatorio() {
+    const periodo = prompt('Digite o período (YYYY-MM) ou deixe em branco para todos:');
+    const url = periodo ? `/api/taxa/relatorio?periodo=${periodo}` : '/api/taxa/relatorio';
+    window.open(url, '_blank');
+}
+
+// Função para verificar vencimentos
+function verificarVencimentos() {
+    fetch('/api/taxa/verificar-vencimentos')
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert(`Verificação concluída:\n- ${data.vencidas} taxa(s) vencida(s)\n- ${data.processadas} taxa(s) processada(s)`);
+            location.reload();
+        } else {
+            alert('Erro ao verificar vencimentos');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro na verificação');
+    });
+}
+
+// Funções para fechar modais
+function fecharModalDetalhesTaxa() {
+    document.getElementById('modal-detalhes-taxa').style.display = 'none';
+}
+
+function fecharModalConfirmarPagamento() {
+    document.getElementById('modal-confirmar-pagamento').style.display = 'none';
+}
+
+// Fechar modais clicando fora
+document.getElementById('modal-detalhes-taxa').onclick = function(event) {
+    if (event.target === this) {
+        fecharModalDetalhesTaxa();
+    }
+}
+
+document.getElementById('modal-confirmar-pagamento').onclick = function(event) {
+    if (event.target === this) {
+        fecharModalConfirmarPagamento();
+    }
+}
+</script>
+{% endblock %}

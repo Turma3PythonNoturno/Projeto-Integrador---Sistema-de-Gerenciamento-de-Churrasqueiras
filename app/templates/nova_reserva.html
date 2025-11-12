@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block titulo %}Nova Reserva - SINT-IFESGO{% endblock %}
+
+{% block conteudo %}
+<h2 style="text-align: center; margin-bottom: 30px;">Nova Reserva da Churrasqueira</h2>
+
+<!-- Aviso sobre adimplência -->
+<div class="alert alert-info" style="margin-bottom: 30px; text-align: center;">
+    <strong>IMPORTANTE:</strong> Apenas associados adimplentes podem fazer reservas.<br>
+    <strong>Taxa de Reserva:</strong> R$ 25,00 - Confirme o pagamento em até 24h após a reserva.
+</div>
+
+<div id="mensagem" style="display: none;" class="alert"></div>
+
+<form id="form-reserva" style="max-width: 600px; margin: 0 auto;">
+    <!-- Validação de CPF do Associado -->
+    <div class="form-group">
+        <label for="cpf_associado">CPF do Associado *</label>
+        <input type="text" id="cpf_associado" name="cpf_associado" required maxlength="14" 
+               placeholder="000.000.000-00">
+        <small style="color: #666;">Digite seu CPF para verificar sua situação no sindicato</small>
+        <div id="status-associado" style="margin-top: 10px;"></div>
+    </div>
+
+    <div class="form-group">
+        <label for="nome">Nome do Responsável *</label>
+        <input type="text" id="nome" name="nome" required maxlength="100" 
+               placeholder="Digite o nome completo" readonly>
+        <small style="color: #666;">Nome será preenchido automaticamente após validação do CPF</small>
+    </div>
+
+    <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" maxlength="100" 
+               placeholder="seu-email@exemplo.com" readonly>
+    </div>
+
+    <div class="form-group">
+        <label for="telefone">Telefone</label>
+        <input type="tel" id="telefone" name="telefone" maxlength="20" 
+               placeholder="(62) 99999-9999" readonly>
+    </div>
+
+        <div class="form-group">
+            <label for="data_reserva">Data da Reserva *</label>
+            <input type="date" id="data_reserva" name="data_reserva" required>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="form-group">
+                <label for="horario_inicio">Horário de Início *</label>
+                <select id="horario_inicio" name="horario_inicio" required>
+                    <option value="">Selecione...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="horario_fim">Horário de Término *</label>
+                <select id="horario_fim" name="horario_fim" required>
+                    <option value="">Selecione...</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="numero_convidados">Número de Convidados</label>
+            <select id="numero_convidados" name="numero_convidados">
+                <option value="1">1 pessoa</option>
+                <option value="2">2 pessoas</option>
+                <option value="3">3 pessoas</option>
+                <option value="4">4 pessoas</option>
+                <option value="5">5 pessoas</option>
+                <option value="6">6 pessoas</option>
+                <option value="7">7 pessoas</option>
+                <option value="8">8 pessoas</option>
+                <option value="9">9 pessoas</option>
+                <option value="10">10 pessoas</option>
+                <option value="15">15 pessoas</option>
+                <option value="20">20 pessoas</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="observacoes">Observações</label>
+            <textarea id="observacoes" name="observacoes" rows="3" 
+                      placeholder="Informações adicionais sobre a reserva..."></textarea>
+        </div>
+
+        <div id="verificacao-disponibilidade" style="display: none; margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
+            <h4>Verificando Disponibilidade...</h4>
+            <div id="resultado-disponibilidade"></div>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <button type="submit" class="btn">
+                Criar Reserva
+            </button>
+            <a href="{{ url_for('routes.inicio') }}" class="btn btn-secondary" style="text-decoration: none; margin-left: 10px;">
+                Cancelar
+            </a>
+        </div>
+    </form>
+    {% endblock %}
+
+    {% block scripts %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const formReserva = document.getElementById('form-reserva');
+        const dataReserva = document.getElementById('data_reserva');
+        const horarioInicio = document.getElementById('horario_inicio');
+        const horarioFim = document.getElementById('horario_fim');
+        const verificacaoDiv = document.getElementById('verificacao-disponibilidade');
+        const resultadoDiv = document.getElementById('resultado-disponibilidade');
+        const mensagemDiv = document.getElementById('mensagem');
+
+        // Definir data mínima como amanhã
+        const hoje = new Date();
+        const amanha = new Date(hoje);
+        amanha.setDate(amanha.getDate() + 1);
+        const dataMinima = amanha.toISOString().split('T')[0];
+        dataReserva.min = dataMinima;
+
+        // Definir data máxima (30 dias)
+        const dataMaxima = new Date(hoje);
+        dataMaxima.setDate(dataMaxima.getDate() + 30);
+        dataReserva.max = dataMaxima.toISOString().split('T')[0];
+
+        // Gerar opções de horário
+        function gerarOpcoesHorario(selectElement) {
+            selectElement.innerHTML = '<option value="">Selecione...</option>';
+            for (let h = 8; h <= 22; h++) {
+                for (let m = 0; m < 60; m += 30) {
+                    const horario = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+                    const option = document.createElement('option');
+                    option.value = horario;
+                    option.textContent = horario;
+                    selectElement.appendChild(option);
+                }
+            }
+        }
+
+        gerarOpcoesHorario(horarioInicio);
+        gerarOpcoesHorario(horarioFim);
+
+        // Verificar disponibilidade quando os campos mudarem
+        function verificarDisponibilidade() {
+            const data = dataReserva.value;
+            const inicio = horarioInicio.value;
+            const fim = horarioFim.value;
+
+            if (!data || !inicio || !fim) {
+                verificacaoDiv.style.display = 'none';
+                return;
+            }
+
+            verificacaoDiv.style.display = 'block';
+            resultadoDiv.innerHTML = 'Verificando disponibilidade...';
+
+            fetch(`/api/verificar-disponibilidade?data=${data}&horario_inicio=${inicio}&horario_fim=${fim}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.disponivel) {
+                        resultadoDiv.innerHTML = `
+                            <div style="color: green; font-weight: bold;">
+                                ${data.mensagem}
+                            </div>
+                        `;
+                    } else {
+                        resultadoDiv.innerHTML = `
+                            <div style="color: red; font-weight: bold;">
+                                ${data.mensagem}
+                            </div>
+                        `;
+                    }
+
+                    // Mostrar horários ocupados se houver
+                    if (data.horarios_ocupados && data.horarios_ocupados.length > 0) {
+                        let ocupadosHtml = '<h5>Horários já ocupados nesta data:</h5><ul>';
+                        data.horarios_ocupados.forEach(ocupado => {
+                            ocupadosHtml += `<li>${ocupado.inicio} - ${ocupado.fim} (${ocupado.nome})</li>`;
+                        });
+                        ocupadosHtml += '</ul>';
+                        resultadoDiv.innerHTML += ocupadosHtml;
+                    }
+                })
+                .catch(error => {
+                    resultadoDiv.innerHTML = '<div style="color: red;">Erro ao verificar disponibilidade</div>';
+                    console.error('Erro:', error);
+                });
+        }
+
+        dataReserva.addEventListener('change', verificarDisponibilidade);
+        horarioInicio.addEventListener('change', verificarDisponibilidade);
+        horarioFim.addEventListener('change', verificarDisponibilidade);
+
+        // Submissão do formulário
+        formReserva.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(formReserva);
+            const dados = {};
+            for (let [key, value] of formData.entries()) {
+                dados[key] = value;
+            }
+
+            fetch('/api/criar-reserva', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dados)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    mensagemDiv.className = 'alert alert-success';
+                    mensagemDiv.innerHTML = `${data.mensagem}<br><small>ID da Reserva: ${data.reserva_id}</small>`;
+                    mensagemDiv.style.display = 'block';
+                    formReserva.reset();
+                    verificacaoDiv.style.display = 'none';
+                    
+                    // Redirecionar após alguns segundos
+                    setTimeout(() => {
+                        window.location.href = '/reservas';
+                    }, 3000);
+                } else {
+                    mensagemDiv.className = 'alert alert-error';
+                    mensagemDiv.innerHTML = `${data.mensagem}`;
+                    mensagemDiv.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                mensagemDiv.className = 'alert alert-error';
+                mensagemDiv.innerHTML = 'Erro interno. Tente novamente.';
+                mensagemDiv.style.display = 'block';
+                console.error('Erro:', error);
+            });
+        });
+    });
+    </script>
+    {% endblock %}
+</body>
+</html>

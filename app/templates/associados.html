@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+
+{% block titulo %}Gestão de Associados - SINT-IFESGO{% endblock %}
+
+{% block conteudo %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h2>Gestão de Associados</h2>
+    <button class="btn" onclick="abrirModalNovoAssociado()" style="background-color: #28a745;">
+        Novo Associado
+    </button>
+</div>
+
+<!-- Estatísticas -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
+    <div style="background: linear-gradient(135deg, #28a745, #20c997); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+        <h3 style="margin: 0; font-size: 2em;">{{ estatisticas.total_associados or 0 }}</h3>
+        <p style="margin: 5px 0 0 0;">Total de Associados</p>
+    </div>
+    <div style="background: linear-gradient(135deg, #007bff, #17a2b8); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+        <h3 style="margin: 0; font-size: 2em;">{{ estatisticas.adimplentes or 0 }}</h3>
+        <p style="margin: 5px 0 0 0;">Adimplentes</p>
+    </div>
+    <div style="background: linear-gradient(135deg, #dc3545, #fd7e14); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+        <h3 style="margin: 0; font-size: 2em;">{{ estatisticas.inadimplentes or 0 }}</h3>
+        <p style="margin: 5px 0 0 0;">Inadimplentes</p>
+    </div>
+    <div style="background: linear-gradient(135deg, #6f42c1, #e83e8c); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+        <h3 style="margin: 0; font-size: 2em;">{{ ((estatisticas.adimplentes or 0) / (estatisticas.total_associados or 1) * 100) | round(1) }}%</h3>
+        <p style="margin: 5px 0 0 0;">Taxa de Adimplência</p>
+    </div>
+</div>
+
+<!-- Filtros e Busca -->
+<div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 30px;">
+    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px;">
+        <div>
+            <label>Buscar por nome ou CPF:</label>
+            <input type="text" id="busca-associado" onkeyup="filtrarAssociados()" placeholder="Digite nome ou CPF...">
+        </div>
+        <div>
+            <label>Status de Adimplência:</label>
+            <select id="filtro-adimplencia" onchange="filtrarAssociados()">
+                <option value="">Todos</option>
+                <option value="adimplente">Adimplentes</option>
+                <option value="inadimplente">Inadimplentes</option>
+            </select>
+        </div>
+        <div>
+            <label>Status do Cadastro:</label>
+            <select id="filtro-ativo" onchange="filtrarAssociados()">
+                <option value="">Todos</option>
+                <option value="true">Ativos</option>
+                <option value="false">Inativos</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- Tabela de Associados -->
+<div style="overflow-x: auto; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background-color: #2c5234; color: white;">
+                <th style="padding: 15px; text-align: left;">Nome</th>
+                <th style="padding: 15px; text-align: left;">CPF</th>
+                <th style="padding: 15px; text-align: left;">Email</th>
+                <th style="padding: 15px; text-align: left;">Telefone</th>
+                <th style="padding: 15px; text-align: center;">Adimplência</th>
+                <th style="padding: 15px; text-align: center;">Último Pagamento</th>
+                <th style="padding: 15px; text-align: center;">Ações</th>
+            </tr>
+        </thead>
+        <tbody id="tabela-associados">
+            {% if associados %}
+                {% for associado in associados %}
+                <tr class="linha-associado" 
+                    data-nome="{{ associado.nome | lower }}" 
+                    data-cpf="{{ associado.cpf }}"
+                    data-adimplencia="{{ associado.status_adimplencia }}"
+                    data-ativo="{{ associado.ativo | string | lower }}">
+                    <td style="padding: 15px; font-weight: bold;">{{ associado.nome }}</td>
+                    <td style="padding: 15px; font-family: monospace;">{{ associado.cpf_formatado }}</td>
+                    <td style="padding: 15px;">{{ associado.email }}</td>
+                    <td style="padding: 15px;">{{ associado.telefone or '-' }}</td>
+                    <td style="padding: 15px; text-align: center;">
+                        <span class="status-badge status-{{ associado.status_adimplencia }}">
+                            {{ associado.status_adimplencia | title }}
+                        </span>
+                    </td>
+                    <td style="padding: 15px; text-align: center;">
+                        {% if associado.data_ultimo_pagamento %}
+                            {{ associado.data_ultimo_pagamento.strftime('%d/%m/%Y') }}
+                        {% else %}
+                            <span style="color: #dc3545;">Nunca</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 15px; text-align: center;">
+                        <div style="display: flex; gap: 5px; justify-content: center;">
+                            <button class="btn btn-sm" onclick="editarAssociado('{{ associado.cpf }}')" 
+                                    style="background-color: #ffc107; color: #000; padding: 5px 10px;">
+                                Editar
+                            </button>
+                            {% if associado.status_adimplencia == 'inadimplente' %}
+                            <button class="btn btn-sm" onclick="marcarAdimplente('{{ associado.cpf }}')" 
+                                    style="background-color: #28a745; padding: 5px 10px;">
+                                Quitar
+                            </button>
+                            {% endif %}
+                            <button class="btn btn-sm" onclick="verDetalhes('{{ associado.cpf }}')" 
+                                    style="background-color: #17a2b8; padding: 5px 10px;">
+                                Detalhes
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="7" style="padding: 50px; text-align: center; color: #666;">
+                        Nenhum associado encontrado.
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal para Novo/Editar Associado -->
+<div id="modal-associado" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 600px;">
+        <h3 id="modal-associado-titulo">Novo Associado</h3>
+        
+        <form id="form-associado" onsubmit="salvarAssociado(event)">
+            <input type="hidden" id="associado-cpf-original" name="cpf_original">
+            
+            <div class="form-group">
+                <label for="nome-associado">Nome Completo *</label>
+                <input type="text" id="nome-associado" name="nome" required maxlength="100">
+            </div>
+            
+            <div class="form-group">
+                <label for="cpf-associado">CPF *</label>
+                <input type="text" id="cpf-associado" name="cpf" required maxlength="14" 
+                       placeholder="000.000.000-00" onkeyup="formatarCPF(this)">
+            </div>
+            
+            <div class="form-group">
+                <label for="email-associado">Email *</label>
+                <input type="email" id="email-associado" name="email" required maxlength="100">
+            </div>
+            
+            <div class="form-group">
+                <label for="telefone-associado">Telefone</label>
+                <input type="tel" id="telefone-associado" name="telefone" maxlength="20" 
+                       placeholder="(62) 99999-9999">
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label for="status-adimplencia">Status de Adimplência *</label>
+                    <select id="status-adimplencia" name="status_adimplencia" required>
+                        <option value="adimplente">Adimplente</option>
+                        <option value="inadimplente">Inadimplente</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="data-ultimo-pagamento">Último Pagamento</label>
+                    <input type="date" id="data-ultimo-pagamento" name="data_ultimo_pagamento">
+                </div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; margin-top: 30px;">
+                <button type="button" class="btn btn-secondary" onclick="fecharModalAssociado()">Cancelar</button>
+                <button type="submit" class="btn" style="background-color: #28a745;">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal de Detalhes do Associado -->
+<div id="modal-detalhes" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
+        <h3>Detalhes do Associado</h3>
+        <div id="conteudo-detalhes"></div>
+        <button class="btn btn-secondary" onclick="fecharModalDetalhes()" style="margin-top: 20px;">Fechar</button>
+    </div>
+</div>
+
+<style>
+.status-badge {
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.status-adimplente {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.status-inadimplente {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.btn-sm {
+    padding: 8px 12px;
+    font-size: 0.9em;
+}
+
+.linha-associado:hover {
+    background-color: #f8f9fa;
+}
+
+#busca-associado {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+}
+</style>
+
+<script>
+// Função para abrir modal de novo associado
+function abrirModalNovoAssociado() {
+    document.getElementById('modal-associado-titulo').textContent = 'Novo Associado';
+    document.getElementById('form-associado').reset();
+    document.getElementById('associado-cpf-original').value = '';
+    document.getElementById('modal-associado').style.display = 'block';
+}
+
+// Função para fechar modal
+function fecharModalAssociado() {
+    document.getElementById('modal-associado').style.display = 'none';
+}
+
+// Função para fechar modal de detalhes
+function fecharModalDetalhes() {
+    document.getElementById('modal-detalhes').style.display = 'none';
+}
+
+// Função para formatar CPF
+function formatarCPF(input) {
+    let cpf = input.value.replace(/\D/g, '');
+    cpf = cpf.replace(/(\d{3})(\d)/, '$1.$2');
+    cpf = cpf.replace(/(\d{3})(\d)/, '$1.$2');
+    cpf = cpf.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    input.value = cpf;
+}
+
+// Função para salvar associado
+function salvarAssociado(event) {
+    event.preventDefault();
+    
+    const formData = new FormData(event.target);
+    const associadoData = Object.fromEntries(formData.entries());
+    
+    const url = associadoData.cpf_original ? 
+        `/api/associado/atualizar/${associadoData.cpf_original}` : 
+        '/api/associado/criar';
+    
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(associadoData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert(data.mensagem);
+            location.reload();
+        } else {
+            alert('Erro: ' + data.mensagem);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao salvar associado');
+    });
+}
+
+// Função para filtrar associados
+function filtrarAssociados() {
+    const busca = document.getElementById('busca-associado').value.toLowerCase();
+    const filtroAdimplencia = document.getElementById('filtro-adimplencia').value;
+    const filtroAtivo = document.getElementById('filtro-ativo').value;
+    
+    const linhas = document.querySelectorAll('.linha-associado');
+    
+    linhas.forEach(linha => {
+        let mostrar = true;
+        
+        // Filtro de busca por nome ou CPF
+        if (busca) {
+            const nome = linha.dataset.nome;
+            const cpf = linha.dataset.cpf;
+            if (!nome.includes(busca) && !cpf.includes(busca)) {
+                mostrar = false;
+            }
+        }
+        
+        // Filtro de adimplência
+        if (filtroAdimplencia && linha.dataset.adimplencia !== filtroAdimplencia) {
+            mostrar = false;
+        }
+        
+        // Filtro de ativo
+        if (filtroAtivo && linha.dataset.ativo !== filtroAtivo) {
+            mostrar = false;
+        }
+        
+        linha.style.display = mostrar ? '' : 'none';
+    });
+}
+
+// Função para editar associado
+function editarAssociado(cpf) {
+    fetch(`/api/associado/buscar/${cpf}`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            const associado = data.associado;
+            document.getElementById('modal-associado-titulo').textContent = 'Editar Associado';
+            document.getElementById('associado-cpf-original').value = associado.cpf;
+            document.getElementById('nome-associado').value = associado.nome;
+            document.getElementById('cpf-associado').value = associado.cpf_formatado;
+            document.getElementById('email-associado').value = associado.email;
+            document.getElementById('telefone-associado').value = associado.telefone || '';
+            document.getElementById('status-adimplencia').value = associado.status_adimplencia;
+            document.getElementById('data-ultimo-pagamento').value = associado.data_ultimo_pagamento || '';
+            document.getElementById('modal-associado').style.display = 'block';
+        } else {
+            alert('Erro ao carregar dados do associado');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao carregar associado');
+    });
+}
+
+// Função para marcar como adimplente
+function marcarAdimplente(cpf) {
+    if (confirm('Confirmar quitação da taxa sindical?')) {
+        fetch(`/api/associado/marcar-adimplente/${cpf}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.sucesso) {
+                alert('Associado marcado como adimplente');
+                location.reload();
+            } else {
+                alert('Erro: ' + data.mensagem);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao atualizar status');
+        });
+    }
+}
+
+// Função para ver detalhes
+function verDetalhes(cpf) {
+    fetch(`/api/associado/detalhes/${cpf}`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            const detalhes = data.detalhes;
+            document.getElementById('conteudo-detalhes').innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <h4>Dados Pessoais</h4>
+                        <p><strong>Nome:</strong> ${detalhes.associado.nome}</p>
+                        <p><strong>CPF:</strong> ${detalhes.associado.cpf_formatado}</p>
+                        <p><strong>Email:</strong> ${detalhes.associado.email}</p>
+                        <p><strong>Telefone:</strong> ${detalhes.associado.telefone || 'Não informado'}</p>
+                        <p><strong>Status:</strong> <span class="status-badge status-${detalhes.associado.status_adimplencia}">${detalhes.associado.status_adimplencia}</span></p>
+                    </div>
+                    <div>
+                        <h4>Histórico</h4>
+                        <p><strong>Cadastro:</strong> ${detalhes.associado.data_cadastro}</p>
+                        <p><strong>Último Pagamento:</strong> ${detalhes.associado.data_ultimo_pagamento || 'Nunca'}</p>
+                        <p><strong>Total de Reservas:</strong> ${detalhes.total_reservas}</p>
+                        <p><strong>Reservas Ativas:</strong> ${detalhes.reservas_ativas}</p>
+                    </div>
+                </div>
+                <div style="margin-top: 20px;">
+                    <h4>Reservas Recentes</h4>
+                    ${detalhes.reservas_recentes.map(r => `
+                        <div style="padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px;">
+                            <strong>${r.data_reserva}</strong> - ${r.horario_inicio} às ${r.horario_fim}
+                            <span style="float: right; color: ${r.status === 'ativa' ? 'green' : 'red'};">${r.status}</span>
+                        </div>
+                    `).join('') || '<p>Nenhuma reserva encontrada.</p>'}
+                </div>
+            `;
+            document.getElementById('modal-detalhes').style.display = 'block';
+        } else {
+            alert('Erro ao carregar detalhes');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao carregar detalhes');
+    });
+}
+
+// Fechar modais clicando fora
+document.getElementById('modal-associado').onclick = function(event) {
+    if (event.target === this) {
+        fecharModalAssociado();
+    }
+}
+
+document.getElementById('modal-detalhes').onclick = function(event) {
+    if (event.target === this) {
+        fecharModalDetalhes();
+    }
+}
+</script>
+{% endblock %}

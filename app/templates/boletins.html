@@ -1,0 +1,380 @@
+{% extends "base.html" %}
+
+{% block titulo %}Boletins Informativos - SINT-IFESGO{% endblock %}
+
+{% block conteudo %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h2>Boletins Informativos</h2>
+    <button class="btn" onclick="abrirModalNovoBoletim()" style="background-color: #28a745;">
+        Novo Boletim
+    </button>
+</div>
+
+<!-- Filtros -->
+<div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 30px;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+        <div>
+            <label>Filtrar por tipo:</label>
+            <select id="filtro-tipo" onchange="filtrarBoletins()">
+                <option value="">Todos</option>
+                <option value="geral">Geral</option>
+                <option value="urgente">Urgente</option>
+                <option value="comunicado">Comunicado</option>
+                <option value="evento">Evento</option>
+            </select>
+        </div>
+        <div>
+            <label>Filtrar por prioridade:</label>
+            <select id="filtro-prioridade" onchange="filtrarBoletins()">
+                <option value="">Todas</option>
+                <option value="baixa">Baixa</option>
+                <option value="normal">Normal</option>
+                <option value="alta">Alta</option>
+                <option value="critica">Crítica</option>
+            </select>
+        </div>
+        <div>
+            <label>Status:</label>
+            <select id="filtro-ativo" onchange="filtrarBoletins()">
+                <option value="">Todos</option>
+                <option value="true">Ativos</option>
+                <option value="false">Inativos</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- Lista de Boletins -->
+<div id="lista-boletins">
+    {% if boletins %}
+        {% for boletim in boletins %}
+        <div class="boletim-card" data-tipo="{{ boletim.tipo }}" data-prioridade="{{ boletim.prioridade }}" data-ativo="{{ boletim.is_ativo() | string | lower }}">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+                <div>
+                    <h3 style="margin: 0 0 5px 0; color: #2c5234;">{{ boletim.titulo }}</h3>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <span class="badge badge-{{ boletim.tipo }}">{{ boletim.tipo.title() }}</span>
+                        <span class="badge badge-prioridade-{{ boletim.prioridade }}">{{ boletim.prioridade.title() }}</span>
+                        {% if not boletim.is_ativo() %}
+                        <span class="badge badge-inativo">Inativo</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-sm" onclick="editarBoletim({{ boletim.id }})" style="background-color: #ffc107; color: #000;">
+                        Editar
+                    </button>
+                    {% if boletim.is_ativo() %}
+                    <button class="btn btn-sm" onclick="desativarBoletim({{ boletim.id }})" style="background-color: #dc3545;">
+                        Desativar
+                    </button>
+                    {% else %}
+                    <button class="btn btn-sm" onclick="ativarBoletim({{ boletim.id }})" style="background-color: #28a745;">
+                        Ativar
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                <div class="conteudo-boletim">{{ boletim.conteudo | safe }}</div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; font-size: 0.9em; color: #666;">
+                <span>Publicado: {{ boletim.data_publicacao.strftime('%d/%m/%Y %H:%M') }}</span>
+                <span>Destinatários: {{ boletim.destinatarios | title }}</span>
+                {% if boletim.data_expiracao %}
+                <span>Expira: {{ boletim.data_expiracao.strftime('%d/%m/%Y %H:%M') }}</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div style="text-align: center; padding: 50px; color: #666;">
+            <p>Nenhum boletim encontrado.</p>
+            <button class="btn" onclick="abrirModalNovoBoletim()">Criar primeiro boletim</button>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Modal para Novo/Editar Boletim -->
+<div id="modal-boletim" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 800px; max-height: 90vh; overflow-y: auto;">
+        <h3 id="modal-titulo">Novo Boletim</h3>
+        
+        <form id="form-boletim" onsubmit="salvarBoletim(event)">
+            <input type="hidden" id="boletim-id" name="id">
+            
+            <div class="form-group">
+                <label for="titulo">Título *</label>
+                <input type="text" id="titulo" name="titulo" required maxlength="200">
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                <div>
+                    <label for="tipo">Tipo *</label>
+                    <select id="tipo" name="tipo" required>
+                        <option value="geral">Geral</option>
+                        <option value="comunicado">Comunicado</option>
+                        <option value="urgente">Urgente</option>
+                        <option value="evento">Evento</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="prioridade">Prioridade *</label>
+                    <select id="prioridade" name="prioridade" required>
+                        <option value="baixa">Baixa</option>
+                        <option value="normal">Normal</option>
+                        <option value="alta">Alta</option>
+                        <option value="critica">Crítica</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="destinatarios">Destinatários *</label>
+                    <select id="destinatarios" name="destinatarios" required>
+                        <option value="todos">Todos os associados</option>
+                        <option value="adimplentes">Apenas adimplentes</option>
+                        <option value="inadimplentes">Apenas inadimplentes</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="conteudo">Conteúdo *</label>
+                
+                <!-- Barra de ferramentas do editor -->
+                <div id="toolbar" style="border: 1px solid #ddd; border-bottom: none; padding: 10px; background: #f8f9fa; border-radius: 8px 8px 0 0;">
+                    <button type="button" onclick="formatarTexto('bold')" title="Negrito"><b>B</b></button>
+                    <button type="button" onclick="formatarTexto('italic')" title="Itálico"><i>I</i></button>
+                    <button type="button" onclick="formatarTexto('underline')" title="Sublinhado"><u>U</u></button>
+                    <span style="margin: 0 10px;">|</span>
+                    <button type="button" onclick="formatarTexto('insertUnorderedList')" title="Lista">• Lista</button>
+                    <button type="button" onclick="formatarTexto('insertOrderedList')" title="Lista Numerada">1. Lista</button>
+                    <span style="margin: 0 10px;">|</span>
+                    <button type="button" onclick="inserirLink()" title="Inserir Link">🔗 Link</button>
+                    <button type="button" onclick="inserirImagem()" title="Inserir Imagem">🖼️ Imagem</button>
+                    <span style="margin: 0 10px;">|</span>
+                    <select onchange="mudarTamanhoFonte(this.value)">
+                        <option value="">Tamanho</option>
+                        <option value="1">Muito Pequeno</option>
+                        <option value="2">Pequeno</option>
+                        <option value="3">Normal</option>
+                        <option value="4">Grande</option>
+                        <option value="5">Muito Grande</option>
+                    </select>
+                    <input type="color" onchange="mudarCor(this.value)" title="Cor do texto">
+                </div>
+                
+                <!-- Editor de texto rico -->
+                <div id="editor-conteudo" 
+                     contenteditable="true" 
+                     style="min-height: 300px; padding: 15px; border: 1px solid #ddd; border-top: none; border-radius: 0 0 8px 8px; background: white; outline: none;"
+                     placeholder="Digite o conteúdo do boletim aqui...">
+                </div>
+                
+                <!-- Campo oculto para enviar o conteúdo -->
+                <input type="hidden" id="conteudo" name="conteudo">
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                <div>
+                    <label for="data-expiracao">Data de Expiração (opcional)</label>
+                    <input type="datetime-local" id="data-expiracao" name="data_expiracao">
+                </div>
+                <div>
+                    <label for="autor">Autor</label>
+                    <input type="text" id="autor" name="autor" value="SINT-IFESGO" maxlength="100">
+                </div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; margin-top: 30px;">
+                <button type="button" class="btn btn-secondary" onclick="fecharModalBoletim()">Cancelar</button>
+                <button type="submit" class="btn" style="background-color: #28a745;">Salvar Boletim</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.boletim-card {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    border-left: 4px solid #2c5234;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: bold;
+    color: white;
+}
+
+.badge-geral { background-color: #007bff; }
+.badge-urgente { background-color: #dc3545; }
+.badge-comunicado { background-color: #28a745; }
+.badge-evento { background-color: #ffc107; color: #000; }
+
+.badge-prioridade-baixa { background-color: #6c757d; }
+.badge-prioridade-normal { background-color: #17a2b8; }
+.badge-prioridade-alta { background-color: #fd7e14; }
+.badge-prioridade-critica { background-color: #dc3545; }
+
+.badge-inativo { background-color: #6c757d; }
+
+.btn-sm {
+    padding: 8px 15px;
+    font-size: 0.9em;
+}
+
+#toolbar button {
+    padding: 5px 10px;
+    margin-right: 5px;
+    border: 1px solid #ccc;
+    background: white;
+    cursor: pointer;
+    border-radius: 3px;
+}
+
+#toolbar button:hover {
+    background: #e9ecef;
+}
+
+.conteudo-boletim img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+}
+
+.conteudo-boletim a {
+    color: #2c5234;
+    text-decoration: underline;
+}
+</style>
+
+<script>
+// Variáveis globais
+let boletins = {{ boletins | tojson if boletins else [] }};
+
+// Função para abrir modal de novo boletim
+function abrirModalNovoBoletim() {
+    document.getElementById('modal-titulo').textContent = 'Novo Boletim';
+    document.getElementById('form-boletim').reset();
+    document.getElementById('boletim-id').value = '';
+    document.getElementById('editor-conteudo').innerHTML = '';
+    document.getElementById('modal-boletim').style.display = 'block';
+}
+
+// Função para fechar modal
+function fecharModalBoletim() {
+    document.getElementById('modal-boletim').style.display = 'none';
+}
+
+// Função para formatar texto no editor
+function formatarTexto(comando) {
+    document.execCommand(comando, false, null);
+}
+
+// Função para inserir link
+function inserirLink() {
+    const url = prompt('Digite a URL:');
+    if (url) {
+        document.execCommand('createLink', false, url);
+    }
+}
+
+// Função para inserir imagem
+function inserirImagem() {
+    const url = prompt('Digite a URL da imagem:');
+    if (url) {
+        document.execCommand('insertImage', false, url);
+    }
+}
+
+// Função para mudar tamanho da fonte
+function mudarTamanhoFonte(tamanho) {
+    if (tamanho) {
+        document.execCommand('fontSize', false, tamanho);
+    }
+}
+
+// Função para mudar cor
+function mudarCor(cor) {
+    document.execCommand('foreColor', false, cor);
+}
+
+// Função para salvar boletim
+function salvarBoletim(event) {
+    event.preventDefault();
+    
+    // Capturar conteúdo do editor
+    const conteudo = document.getElementById('editor-conteudo').innerHTML;
+    document.getElementById('conteudo').value = conteudo;
+    
+    const formData = new FormData(event.target);
+    const boletimData = Object.fromEntries(formData.entries());
+    
+    const url = boletimData.id ? `/api/boletim/atualizar/${boletimData.id}` : '/api/boletim/criar';
+    const method = 'POST';
+    
+    fetch(url, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(boletimData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.sucesso) {
+            alert(data.mensagem);
+            location.reload();
+        } else {
+            alert('Erro: ' + data.mensagem);
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro ao salvar boletim');
+    });
+}
+
+// Função para filtrar boletins
+function filtrarBoletins() {
+    const filtroTipo = document.getElementById('filtro-tipo').value;
+    const filtroPrioridade = document.getElementById('filtro-prioridade').value;
+    const filtroAtivo = document.getElementById('filtro-ativo').value;
+    
+    const cards = document.querySelectorAll('.boletim-card');
+    
+    cards.forEach(card => {
+        let mostrar = true;
+        
+        if (filtroTipo && card.dataset.tipo !== filtroTipo) {
+            mostrar = false;
+        }
+        
+        if (filtroPrioridade && card.dataset.prioridade !== filtroPrioridade) {
+            mostrar = false;
+        }
+        
+        if (filtroAtivo && card.dataset.ativo !== filtroAtivo) {
+            mostrar = false;
+        }
+        
+        card.style.display = mostrar ? 'block' : 'none';
+    });
+}
+
+// Fechar modal clicando fora
+document.getElementById('modal-boletim').onclick = function(event) {
+    if (event.target === this) {
+        fecharModalBoletim();
+    }
+}
+</script>
+{% endblock %}

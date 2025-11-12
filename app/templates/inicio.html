@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block titulo %}SINT-IFESGO - Reserva de Churrasqueira{% endblock %}
+
+{% block conteudo %}
+<div style="text-align: center;">
+    <!-- Banner do SINT-IFESGO -->
+    <div class="sint-banner" style="background: linear-gradient(135deg, #2c5234, #4a7c59); color: white; padding: 30px; border-radius: 10px; margin-bottom: 30px;">
+        <h1 style="margin: 0; font-size: 2em;">SINT-IFESGO</h1>
+        <p style="margin: 10px 0 0 0; font-size: 1.1em;">Sindicato dos Trabalhadores Técnico-Administrativos em Educação<br>das Instituições Federais de Ensino Superior do Estado de Goiás</p>
+    </div>
+    
+    <h2>Sistema de Reserva de Churrasqueira</h2>
+    <p style="font-size: 1.2em; margin: 30px 0;">
+        Exclusivo para associados adimplentes do SINT-IFESGO.<br>
+        Reserve a churrasqueira para seu evento familiar ou confraternização.
+    </p>
+    
+    <!-- Boletins Urgentes -->
+    {% if boletins_urgentes %}
+    <div class="boletins-urgentes" style="margin-bottom: 30px;">
+        <h3 style="color: #dc3545;">COMUNICADOS URGENTES</h3>
+        {% for boletim in boletins_urgentes %}
+        <div class="alert {{ boletim.classe_css }}" style="margin: 10px 0; padding: 15px; border-radius: 5px; text-align: left;">
+            <strong>{{ boletim.titulo }}</strong><br>
+            <small style="color: #666;">{{ boletim.data_publicacao }} - {{ boletim.autor }}</small>
+            <p style="margin-top: 10px;">{{ boletim.resumo }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <div style="display: flex; justify-content: center; gap: 20px; margin: 40px 0; flex-wrap: wrap;">
+        <a href="{{ url_for('routes.nova_reserva') }}" class="btn" style="text-decoration: none; display: inline-block;">
+            Fazer Nova Reserva
+        </a>
+        
+        <a href="{{ url_for('routes.listar_reservas') }}" class="btn btn-secondary" style="text-decoration: none; display: inline-block;">
+            Ver Reservas Existentes
+        </a>
+    </div>
+    
+    <div class="info-card">
+        <h3>Informações Importantes</h3>
+        <div style="text-align: left; max-width: 600px; margin: 0 auto;">
+            <ul style="list-style: none; padding: 0;">
+                <li style="margin: 10px 0; padding: 8px; background-color: white; border-radius: 5px;">
+                    <strong>Horário de Funcionamento:</strong> 08:00 às 18:00
+                </li>
+                <li style="margin: 10px 0; padding: 8px; background-color: #e8f5e8; border-radius: 5px; border-left: 4px solid #28a745;">
+                    <strong>IMPORTANTE:</strong> Apenas associados adimplentes podem fazer reservas
+                </li>
+                <li style="margin: 10px 0; padding: 8px; background-color: #fff3cd; border-radius: 5px; border-left: 4px solid #ffc107;">
+                    <strong>Taxa de Reserva:</strong> R$ 25,00 - Confirme o pagamento em até 24h
+                </li>
+                <li style="margin: 10px 0; padding: 8px; background-color: white; border-radius: 5px;">
+                    <strong>Duração:</strong> Mínimo 4 horas, máximo 8 horas por reserva
+                </li>
+                <li style="margin: 10px 0; padding: 8px; background-color: white; border-radius: 5px;">
+                    <strong>Antecedência:</strong> Reserve com até 30 dias de antecedência
+                </li>
+                <li style="margin: 10px 0; padding: 8px; background-color: white; border-radius: 5px;">
+                    <strong>Cancelamento:</strong> Permitido até 24h antes da reserva
+                </li>
+                <li style="margin: 10px 0; padding: 8px; background-color: white; border-radius: 5px;">
+                    <strong>Capacidade:</strong> Até 20 pessoas por reserva
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <div style="margin-top: 40px; padding: 20px; background-color: #fff3cd; border: 2px solid #ffeaa7; border-radius: 10px;">
+        <h3 style="color: #856404; margin-top: 0;">Regras de Uso</h3>
+        <div style="text-align: left; max-width: 600px; margin: 0 auto;">
+            <ul style="color: #856404;">
+                <li>Mantenha a área limpa após o uso</li>
+                <li>Desligue o gás e limpe a churrasqueira</li>
+                <li>Descarte o lixo nos locais apropriados</li>
+                <li>Respeite o horário de silêncio após 22h</li>
+                <li>É proibido o uso de som alto</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

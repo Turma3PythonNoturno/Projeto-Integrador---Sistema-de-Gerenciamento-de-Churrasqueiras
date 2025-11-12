@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block titulo %}Reservas - Sistema de Churrasqueira{% endblock %}
+
+{% block conteudo %}
+<h2 style="text-align: center; margin-bottom: 30px;">Reservas da Churrasqueira</h2>
+
+<div style="text-align: center; margin-bottom: 20px;">
+    <a href="{{ url_for('routes.nova_reserva') }}" class="btn">
+        Nova Reserva
+    </a>
+</div>
+
+{% if reservas %}
+    <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background-color: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <thead>
+                <tr style="background-color: #8B4513; color: white;">
+                    <th style="padding: 15px; text-align: left;">Data</th>
+                    <th style="padding: 15px; text-align: left;">Horário</th>
+                    <th style="padding: 15px; text-align: left;">Responsável</th>
+                    <th style="padding: 15px; text-align: left;">Convidados</th>
+                    <th style="padding: 15px; text-align: left;">Contato</th>
+                    <th style="padding: 15px; text-align: left;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for reserva in reservas %}
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 15px;">
+                        <strong>{{ reserva.to_dict().data_reserva }}</strong>
+                    </td>
+                    <td style="padding: 15px;">
+                        {{ reserva.to_dict().horario_inicio }} - {{ reserva.to_dict().horario_fim }}
+                    </td>
+                    <td style="padding: 15px;">
+                        <strong>{{ reserva.nome }}</strong>
+                        {% if reserva.observacoes %}
+                            <br><small style="color: #666;">{{ reserva.observacoes }}</small>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 15px;">
+                        {{ reserva.numero_convidados }} pessoas
+                    </td>
+                    <td style="padding: 15px;">
+                        {% if reserva.email %}
+                            {{ reserva.email }}<br>
+                        {% endif %}
+                        {% if reserva.telefone %}
+                            {{ reserva.telefone }}
+                        {% endif %}
+                    </td>
+                    <td style="padding: 15px;">
+                        <span style="background-color: #28a745; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px;">
+                            {{ reserva.to_dict().status_display }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div style="text-align: center; margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 10px;">
+        <p><strong>Total de reservas ativas:</strong> {{ reservas|length }}</p>
+        <p style="color: #666; font-size: 14px;">
+            Mostrando apenas reservas futuras e ativas
+        </p>
+    </div>
+
+{% else %}
+    <div style="text-align: center; padding: 60px 20px; background-color: #f8f9fa; border-radius: 15px;">
+        <h3 style="color: #6c757d;">Nenhuma reserva encontrada</h3>
+        <p style="color: #6c757d; margin: 20px 0;">
+            Não há reservas ativas para os próximos dias.
+        </p>
+        <a href="{{ url_for('routes.nova_reserva') }}" class="btn">
+            Fazer Primeira Reserva
+        </a>
+    </div>
+{% endif %}
+{% endblock %}
