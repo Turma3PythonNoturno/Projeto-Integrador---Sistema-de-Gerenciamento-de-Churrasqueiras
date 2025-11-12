@@ -64,6 +64,19 @@ class AssociadoService:
                     'mensagem': 'Email já cadastrado no sistema'
                 }
             
+            # Processar data de último pagamento
+            data_ultimo_pagamento = None
+            if dados.get('data_ultimo_pagamento'):
+                try:
+                    # Converter string para date
+                    data_str = dados['data_ultimo_pagamento']
+                    if isinstance(data_str, str):
+                        data_ultimo_pagamento = datetime.strptime(data_str, '%Y-%m-%d').date()
+                    elif isinstance(data_str, date):
+                        data_ultimo_pagamento = data_str
+                except ValueError:
+                    pass  # Ignora erro de conversão, deixa como None
+            
             # Criar associado
             novo_associado = Associado(
                 cpf=cpf_limpo,
@@ -71,7 +84,7 @@ class AssociadoService:
                 email=dados['email'].strip(),
                 telefone=dados.get('telefone', '').strip() or None,
                 status_adimplencia=dados.get('status_adimplencia', 'adimplente'),
-                data_ultimo_pagamento=dados.get('data_ultimo_pagamento')
+                data_ultimo_pagamento=data_ultimo_pagamento
             )
             
             db.session.add(novo_associado)

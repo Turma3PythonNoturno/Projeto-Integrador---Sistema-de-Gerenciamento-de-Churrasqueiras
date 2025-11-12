@@ -201,10 +201,30 @@ def listar_associados():
     """Lista todos os associados"""
     try:
         associados = associado_service.listar_todos()
-        return render_template('associados.html', associados=associados)
+        
+        # Calcular estatísticas
+        total_associados = len(associados)
+        adimplentes = sum(1 for a in associados if a.situacao_sindical == 'adimplente')
+        inadimplentes = total_associados - adimplentes
+        
+        estatisticas = {
+            'total_associados': total_associados,
+            'adimplentes': adimplentes,
+            'inadimplentes': inadimplentes
+        }
+        
+        return render_template('associados.html', 
+                             associados=associados,
+                             estatisticas=estatisticas)
     except Exception as e:
+        estatisticas = {
+            'total_associados': 0,
+            'adimplentes': 0,
+            'inadimplentes': 0
+        }
         return render_template('associados.html', 
                              associados=[], 
+                             estatisticas=estatisticas,
                              erro=f"Erro ao carregar associados: {str(e)}")
 
 
