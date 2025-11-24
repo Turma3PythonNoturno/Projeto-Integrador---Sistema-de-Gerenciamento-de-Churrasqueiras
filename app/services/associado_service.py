@@ -199,3 +199,66 @@ class AssociadoService:
                 'sucesso': False,
                 'mensagem': f'Erro ao desativar associado: {str(e)}'
             }
+    
+    def atualizar_associado(self, cpf_original: str, dados: Dict) -> Dict:
+        """Atualiza dados de um associado existente"""
+        try:
+            # Buscar associado pelo CPF original
+            cpf_limpo = self._limpar_cpf(cpf_original)
+            associado = Associado.query.filter_by(cpf=cpf_limpo).first()
+            
+            if not associado:
+                return {
+                    'sucesso': False,
+                    'mensagem': 'Associado não encontrado'
+                }
+            
+            # Atualizar campos permitidos
+            if 'nome' in dados and dados['nome'].strip():
+                associado.nome = dados['nome'].strip()
+            
+            if 'email' in dados and dados['email'].strip():
+                email = dados['email'].strip()
+                
+                # Verificar se email já existe (exceto o próprio associado)
+                email_existe = Associado.query.filter(
+                    Associado.email == email,
+                    Associado.id != associado.id
+                ).first()
+                
+                if email_existe:
+                    return {
+                        'sucesso': False,
+                        'mensagem': 'Este email já está em uso por outro associado'
+                    }
+                
+                associado.email = email
+            
+            if 'telefone' in dados:
+                associado.telefone = dados['telefone'].strip() if dados['telefone'] else None
+            
+            if 'status_adimplencia' in dados:
+                status = dados['status_adimplencia']
+                if status in ['adimplente', 'inadimplente']:
+                    associado.status_adimplencia = status
+                    
+                    # Se marcar como adimplente, atualizar data do pagamento
+                    if status == 'adimplente':
+                        associado.data_ultimo_pagamento = date.today()
+            
+            # CPF não deve ser alterado após criação por questões de integridade
+            
+            db.session.commit()
+            
+            return {
+                'sucesso': True,
+                'mensagem': 'Associado atualizado com sucesso',
+                'associado': associado.to_dict()
+            }
+            
+        except Exception as e:
+            db.session.rollback()
+            return {
+                'sucesso': False,
+                'mensagem': f'Erro ao atualizar associado: {str(e)}'
+            }

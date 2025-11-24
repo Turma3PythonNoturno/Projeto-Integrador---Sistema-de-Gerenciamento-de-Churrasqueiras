@@ -262,20 +262,60 @@ class Associado(db.Model):
     
     def to_dict(self):
         """Converte para dicionário"""
-        return {
-            'id': self.id,
-            'cpf': self.cpf,
-            'cpf_formatado': self.cpf_formatado,
-            'nome': self.nome,
-            'email': self.email,
-            'telefone': self.telefone,
-            'status_adimplencia': self.status_adimplencia,
-            'status_display': 'Adimplente' if self.status_adimplencia == 'adimplente' else 'Inadimplente',
-            'data_ultimo_pagamento': self.data_ultimo_pagamento.strftime('%d/%m/%Y') if self.data_ultimo_pagamento else 'Nunca',
-            'data_cadastro': self.data_cadastro.strftime('%d/%m/%Y %H:%M') if self.data_cadastro else '',
-            'ativo': self.ativo,
-            'pode_reservar': self.is_adimplente()
-        }
+        try:
+            # Formatação segura das datas
+            data_ultimo_pagamento_str = 'Nunca'
+            if self.data_ultimo_pagamento:
+                try:
+                    data_ultimo_pagamento_str = self.data_ultimo_pagamento.strftime('%d/%m/%Y')
+                except:
+                    data_ultimo_pagamento_str = str(self.data_ultimo_pagamento)
+            
+            data_cadastro_str = ''
+            if self.data_cadastro:
+                try:
+                    data_cadastro_str = self.data_cadastro.strftime('%d/%m/%Y %H:%M')
+                except:
+                    data_cadastro_str = str(self.data_cadastro)
+            
+            # CPF formatado seguro
+            cpf_formatado_str = self.cpf
+            try:
+                cpf_formatado_str = self.cpf_formatado
+            except:
+                cpf_formatado_str = self.cpf
+            
+            return {
+                'id': self.id,
+                'cpf': self.cpf or '',
+                'cpf_formatado': cpf_formatado_str,
+                'nome': self.nome or '',
+                'email': self.email or '',
+                'telefone': self.telefone or '',
+                'status_adimplencia': self.status_adimplencia or 'adimplente',
+                'status_display': 'Adimplente' if (self.status_adimplencia == 'adimplente') else 'Inadimplente',
+                'data_ultimo_pagamento': data_ultimo_pagamento_str,
+                'data_cadastro': data_cadastro_str,
+                'ativo': self.ativo if self.ativo is not None else True,
+                'pode_reservar': self.is_adimplente()
+            }
+        except Exception as e:
+            # Fallback em caso de erro
+            return {
+                'id': getattr(self, 'id', 0),
+                'cpf': getattr(self, 'cpf', ''),
+                'cpf_formatado': getattr(self, 'cpf', ''),
+                'nome': getattr(self, 'nome', ''),
+                'email': getattr(self, 'email', ''),
+                'telefone': getattr(self, 'telefone', ''),
+                'status_adimplencia': getattr(self, 'status_adimplencia', 'adimplente'),
+                'status_display': 'Adimplente',
+                'data_ultimo_pagamento': 'Nunca',
+                'data_cadastro': '',
+                'ativo': True,
+                'pode_reservar': True,
+                'erro_conversao': str(e)
+            }
 
 
 class Taxa(db.Model):

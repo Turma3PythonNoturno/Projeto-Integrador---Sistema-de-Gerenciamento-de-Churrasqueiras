@@ -88,8 +88,8 @@
                         </span>
                     </td>
                     <td style="padding: 15px; text-align: center;">
-                        {% if associado.data_ultimo_pagamento %}
-                            {{ associado.data_ultimo_pagamento.strftime('%d/%m/%Y') }}
+                        {% if associado.data_ultimo_pagamento and associado.data_ultimo_pagamento != 'Nunca' %}
+                            {{ associado.data_ultimo_pagamento }}
                         {% else %}
                             <span style="color: #dc3545;">Nunca</span>
                         {% endif %}
@@ -270,18 +270,23 @@ function salvarAssociado(event) {
         },
         body: JSON.stringify(associadoData)
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.sucesso) {
-            alert(data.mensagem);
+            alert(data.mensagem || 'Associado salvo com sucesso!');
             location.reload();
         } else {
-            alert('Erro: ' + data.mensagem);
+            alert('Erro: ' + (data.mensagem || 'Erro desconhecido'));
         }
     })
     .catch(error => {
         console.error('Erro:', error);
-        alert('Erro ao salvar associado');
+        alert('Erro ao salvar associado: ' + error.message);
     });
 }
 
@@ -322,7 +327,12 @@ function filtrarAssociados() {
 // Função para editar associado
 function editarAssociado(cpf) {
     fetch(`/api/associado/buscar/${cpf}`)
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.sucesso) {
             const associado = data.associado;
@@ -336,12 +346,12 @@ function editarAssociado(cpf) {
             document.getElementById('data-ultimo-pagamento').value = associado.data_ultimo_pagamento || '';
             document.getElementById('modal-associado').style.display = 'block';
         } else {
-            alert('Erro ao carregar dados do associado');
+            alert('Erro ao carregar dados do associado: ' + (data.mensagem || 'Erro desconhecido'));
         }
     })
     .catch(error => {
         console.error('Erro:', error);
-        alert('Erro ao carregar associado');
+        alert('Erro ao carregar associado: ' + error.message);
     });
 }
 
@@ -351,18 +361,23 @@ function marcarAdimplente(cpf) {
         fetch(`/api/associado/marcar-adimplente/${cpf}`, {
             method: 'POST'
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.sucesso) {
                 alert('Associado marcado como adimplente');
                 location.reload();
             } else {
-                alert('Erro: ' + data.mensagem);
+                alert('Erro: ' + (data.mensagem || 'Erro desconhecido'));
             }
         })
         .catch(error => {
             console.error('Erro:', error);
-            alert('Erro ao atualizar status');
+            alert('Erro ao atualizar status: ' + error.message);
         });
     }
 }
@@ -370,7 +385,12 @@ function marcarAdimplente(cpf) {
 // Função para ver detalhes
 function verDetalhes(cpf) {
     fetch(`/api/associado/detalhes/${cpf}`)
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.sucesso) {
             const detalhes = data.detalhes;
@@ -378,28 +398,22 @@ function verDetalhes(cpf) {
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                     <div>
                         <h4>Dados Pessoais</h4>
-                        <p><strong>Nome:</strong> ${detalhes.associado.nome}</p>
-                        <p><strong>CPF:</strong> ${detalhes.associado.cpf_formatado}</p>
-                        <p><strong>Email:</strong> ${detalhes.associado.email}</p>
-                        <p><strong>Telefone:</strong> ${detalhes.associado.telefone || 'Não informado'}</p>
-                        <p><strong>Status:</strong> <span class="status-badge status-${detalhes.associado.status_adimplencia}">${detalhes.associado.status_adimplencia}</span></p>
+                        <p><strong>Nome:</strong> ${detalhes.nome}</p>
+                        <p><strong>CPF:</strong> ${detalhes.cpf_formatado}</p>
+                        <p><strong>Email:</strong> ${detalhes.email}</p>
+                        <p><strong>Telefone:</strong> ${detalhes.telefone || 'Não informado'}</p>
+                        <p><strong>Status:</strong> <span class="status-badge status-${detalhes.status_adimplencia}">${detalhes.status_display}</span></p>
                     </div>
                     <div>
                         <h4>Histórico</h4>
-                        <p><strong>Cadastro:</strong> ${detalhes.associado.data_cadastro}</p>
-                        <p><strong>Último Pagamento:</strong> ${detalhes.associado.data_ultimo_pagamento || 'Nunca'}</p>
-                        <p><strong>Total de Reservas:</strong> ${detalhes.total_reservas}</p>
-                        <p><strong>Reservas Ativas:</strong> ${detalhes.reservas_ativas}</p>
+                        <p><strong>Cadastro:</strong> ${detalhes.data_cadastro}</p>
+                        <p><strong>Último Pagamento:</strong> ${detalhes.data_ultimo_pagamento || 'Nunca'}</p>
                     </div>
                 </div>
-                <div style="margin-top: 20px;">
-                    <h4>Reservas Recentes</h4>
-                    ${detalhes.reservas_recentes.map(r => `
-                        <div style="padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px;">
-                            <strong>${r.data_reserva}</strong> - ${r.horario_inicio} às ${r.horario_fim}
-                            <span style="float: right; color: ${r.status === 'ativa' ? 'green' : 'red'};">${r.status}</span>
-                        </div>
-                    `).join('') || '<p>Nenhuma reserva encontrada.</p>'}
+                <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px;">
+                    <h4>Informações Adicionais</h4>
+                    <p><strong>Pode fazer reservas:</strong> ${detalhes.pode_reservar ? 'Sim' : 'Não'}</p>
+                    <p><strong>Conta ativa:</strong> ${detalhes.ativo ? 'Sim' : 'Não'}</p>
                 </div>
             `;
             document.getElementById('modal-detalhes').style.display = 'block';
