@@ -8,7 +8,7 @@ Federais de Ensino Superior do Estado de Goiás.
 Configurações incluem:
 - Parâmetros do Flask (chave secreta, banco de dados)
 - Horários de funcionamento (08:00-18:00h)
-- Valores de taxa de reserva (R$ 25,00)
+- Valores de taxa de reserva (R$ 30,00)
 - Informações organizacionais do SINT-IFESGO
 - Limites e validações do sistema
 
@@ -76,7 +76,7 @@ class Config:
     # =========================================================================
     
     TAXA_RESERVA = {
-        'valor': 25.00,  # Valor da taxa de reserva em reais (R$ 25,00)
+        'valor': 30.00,  # Valor da taxa de reserva em reais (R$ 30,00)
         'prazo_pagamento_horas': 24,  # Prazo para confirmação do pagamento (24h)
         'forma_pagamento': ['PIX', 'Transferência', 'Dinheiro']  # Formas aceitas
     }

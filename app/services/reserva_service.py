@@ -9,14 +9,14 @@ Funcionalidades principais:
 - Criação de reservas com validação de adimplência
 - Controle de horários de funcionamento (08:00-18:00h)
 - Validação de conflitos de horários
-- Integração com sistema de cobrança (R$ 25,00)
+- Integração com sistema de cobrança (R$ 30,00)
 - Gestão de status de reservas
 - Verificação de disponibilidade
 
 Regras de negócio implementadas:
 1. Apenas associados adimplentes podem fazer reservas
 2. Horário de funcionamento: 08:00 às 18:00h
-3. Taxa obrigatória de R$ 25,00 por reserva
+3. Taxa obrigatória de R$ 30,00 por reserva
 4. Prazo de 24h para confirmação de pagamento
 5. Controle de conflitos de horários
 6. Validação de antecedência (1 a 30 dias)
@@ -85,7 +85,7 @@ class ReservaService:
         3. Validação de horários de funcionamento (08:00-18:00h)
         4. Verificação de conflitos de horários
         5. Validação de antecedência e duração
-        6. Geração automática da taxa de reserva (R$ 25,00)
+        6. Geração automática da taxa de reserva (R$ 30,00)
         7. Persistência da reserva com status 'pendente'
         
         Args:
@@ -117,7 +117,7 @@ class ReservaService:
             - Horário de funcionamento: 08:00 às 18:00h
             - Antecedência: 1 a 30 dias
             - Duração: 2 a 6 horas
-            - Taxa obrigatória: R$ 25,00
+            - Taxa obrigatória: R$ 30,00
         """
         
         # 1. VALIDAÇÃO DE DADOS BÁSICOS

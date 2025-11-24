@@ -8,7 +8,7 @@
 <!-- Aviso sobre adimplência -->
 <div class="alert alert-info" style="margin-bottom: 30px; text-align: center;">
     <strong>IMPORTANTE:</strong> Apenas associados adimplentes podem fazer reservas.<br>
-    <strong>Taxa de Reserva:</strong> R$ 25,00 - Confirme o pagamento em até 24h após a reserva.
+    <strong>Taxa de Reserva:</strong> R$ 30,00 - Confirme o pagamento em até 24h após a reserva.
 </div>
 
 <div id="mensagem" style="display: none;" class="alert"></div>
@@ -113,6 +113,13 @@
         const verificacaoDiv = document.getElementById('verificacao-disponibilidade');
         const resultadoDiv = document.getElementById('resultado-disponibilidade');
         const mensagemDiv = document.getElementById('mensagem');
+        
+        // Elementos para validação de CPF
+        const cpfInput = document.getElementById('cpf_associado');
+        const nomeInput = document.getElementById('nome');
+        const emailInput = document.getElementById('email');
+        const telefoneInput = document.getElementById('telefone');
+        const statusAssociadoDiv = document.getElementById('status-associado');
 
         // Definir data mínima como amanhã
         const hoje = new Date();
@@ -142,6 +149,112 @@
 
         gerarOpcoesHorario(horarioInicio);
         gerarOpcoesHorario(horarioFim);
+
+        // Função para formatar CPF
+        function formatarCPF(cpf) {
+            cpf = cpf.replace(/\D/g, ''); // Remove tudo que não é dígito
+            cpf = cpf.replace(/(\d{3})(\d)/, '$1.$2');
+            cpf = cpf.replace(/(\d{3})(\d)/, '$1.$2');
+            cpf = cpf.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+            return cpf;
+        }
+
+        // Função para validar CPF
+        function validarCPF(cpf) {
+            cpf = cpf.replace(/\D/g, ''); // Remove caracteres não numéricos
+            if (cpf.length !== 11) return false;
+            if (/^(\d)\1{10}$/.test(cpf)) return false; // Rejeita números repetidos
+
+            let soma = 0;
+            for (let i = 0; i < 9; i++) {
+                soma += parseInt(cpf[i]) * (10 - i);
+            }
+            let resto = soma % 11;
+            let digitoVerificador1 = resto < 2 ? 0 : 11 - resto;
+
+            if (parseInt(cpf[9]) !== digitoVerificador1) return false;
+
+            soma = 0;
+            for (let i = 0; i < 10; i++) {
+                soma += parseInt(cpf[i]) * (11 - i);
+            }
+            resto = soma % 11;
+            let digitoVerificador2 = resto < 2 ? 0 : 11 - resto;
+
+            return parseInt(cpf[10]) === digitoVerificador2;
+        }
+
+        // Buscar dados do associado por CPF
+        function buscarAssociado(cpf) {
+            const cpfLimpo = cpf.replace(/\D/g, '');
+            
+            if (cpfLimpo.length !== 11) {
+                limparCamposAssociado();
+                statusAssociadoDiv.innerHTML = '';
+                return;
+            }
+
+            if (!validarCPF(cpfLimpo)) {
+                limparCamposAssociado();
+                statusAssociadoDiv.innerHTML = '<div style="color: red; font-weight: bold;">❌ CPF inválido</div>';
+                return;
+            }
+
+            statusAssociadoDiv.innerHTML = '<div style="color: #666;">🔄 Buscando associado...</div>';
+
+            fetch(`/api/associado/verificar/${cpfLimpo}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data.encontrado) {
+                        limparCamposAssociado();
+                        statusAssociadoDiv.innerHTML = '<div style="color: red; font-weight: bold;">❌ ' + data.mensagem + '</div>';
+                    } else {
+                        // Preencher campos com dados do associado
+                        nomeInput.value = data.associado.nome || '';
+                        emailInput.value = data.associado.email || '';
+                        telefoneInput.value = data.associado.telefone || '';
+                        
+                        // Verificar se é adimplente
+                        if (data.adimplente) {
+                            statusAssociadoDiv.innerHTML = '<div style="color: green; font-weight: bold;">✅ Associado encontrado e adimplente</div>';
+                        } else {
+                            statusAssociadoDiv.innerHTML = '<div style="color: red; font-weight: bold;">❌ Associado encontrado, mas NÃO adimplente. Não pode fazer reservas.</div>';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao buscar associado:', error);
+                    limparCamposAssociado();
+                    statusAssociadoDiv.innerHTML = '<div style="color: red; font-weight: bold;">❌ Erro ao buscar associado. Verifique sua conexão.</div>';
+                });
+        }
+
+        // Limpar campos do associado
+        function limparCamposAssociado() {
+            nomeInput.value = '';
+            emailInput.value = '';
+            telefoneInput.value = '';
+        }
+
+        // Formatação e validação do CPF em tempo real
+        cpfInput.addEventListener('input', function(e) {
+            let cpf = e.target.value;
+            e.target.value = formatarCPF(cpf);
+            
+            // Buscar associado quando CPF estiver completo
+            const cpfLimpo = cpf.replace(/\D/g, '');
+            if (cpfLimpo.length === 11) {
+                buscarAssociado(e.target.value);
+            } else if (cpfLimpo.length < 11) {
+                limparCamposAssociado();
+                statusAssociadoDiv.innerHTML = '';
+            }
+        });
 
         // Verificar disponibilidade quando os campos mudarem
         function verificarDisponibilidade() {
