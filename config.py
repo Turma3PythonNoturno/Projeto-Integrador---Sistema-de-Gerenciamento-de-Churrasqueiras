@@ -51,6 +51,25 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # =========================================================================
+    # CONFIGURAÇÕES DO WEB SERVICE EXTERNO (SINSIND)
+    # =========================================================================
+    
+    # URL base do serviço do sindicato
+    WEB_SERVICE_URL = "https://sinsind.app.br/sinsind/sinsind/"
+    
+    # Credenciais para autenticação no web service
+    WEB_SERVICE_CREDENTIALS = {
+        "nome": "WEB_SERVICE",
+        "chave": "consultaWEB_Sint$20_Ifes%25*GO"
+    }
+    
+    # Timeout para requisições HTTP (em segundos)
+    WEB_SERVICE_TIMEOUT = 10
+    
+    # Habilitar/desabilitar integração com web service
+    WEB_SERVICE_ENABLED = os.environ.get('WEB_SERVICE_ENABLED', 'True').lower() == 'true'
+    
+    # =========================================================================
     # CONFIGURAÇÕES DE HORÁRIO DE FUNCIONAMENTO
     # =========================================================================
     

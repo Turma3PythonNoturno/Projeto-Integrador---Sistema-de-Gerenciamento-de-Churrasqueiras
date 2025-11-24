@@ -1,40 +1,79 @@
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, date
 from app.models import db, Associado
+from app.services.webservice_sinsind import web_service_sinsind
+import logging
 
 
 class AssociadoService:
     """Serviço para gerenciamento de associados do SINT-IFESGO"""
     
     def __init__(self):
-        pass
+        self.logger = logging.getLogger(__name__)
     
     def buscar_por_cpf(self, cpf: str) -> Optional[Dict]:
-        """Busca associado por CPF"""
+        """Busca associado por CPF - primeiro no web service, depois no banco local"""
         # Limpar CPF
         cpf_limpo = self._limpar_cpf(cpf)
         
+        # Tentar buscar no web service primeiro
+        try:
+            sucesso, dados_ws, mensagem = web_service_sinsind.consultar_associado(cpf_limpo)
+            
+            if sucesso and dados_ws:
+                self.logger.info(f"Associado {cpf_limpo} encontrado no web service")
+                return dados_ws
+                
+        except Exception as e:
+            self.logger.warning(f"Erro ao consultar web service para CPF {cpf_limpo}: {str(e)}")
+        
+        # Fallback para banco local
         associado = Associado.query.filter_by(cpf=cpf_limpo).first()
         
         if associado:
-            return associado.to_dict()
+            self.logger.info(f"Associado {cpf_limpo} encontrado no banco local")
+            dados_local = associado.to_dict()
+            dados_local['origem'] = 'banco_local'
+            return dados_local
         
         return None
     
     def verificar_adimplencia(self, cpf: str) -> Tuple[bool, str]:
-        """Verifica se associado está adimplente"""
+        """Verifica se associado está adimplente - primeiro no web service, depois no banco local"""
+        # Tentar verificar no web service primeiro
+        try:
+            adimplente_ws, mensagem_ws = web_service_sinsind.verificar_adimplencia(cpf)
+            
+            # Se o web service responder, usar essa informação
+            if mensagem_ws != "Web service desabilitado":
+                return adimplente_ws, mensagem_ws
+                
+        except Exception as e:
+            self.logger.warning(f"Erro ao verificar adimplência no web service para CPF {cpf}: {str(e)}")
+        
+        # Fallback para verificação local
         associado = self.buscar_por_cpf(cpf)
         
         if not associado:
             return False, "CPF não encontrado no cadastro de associados"
         
-        if not associado['ativo']:
+        if not associado.get('ativo', True):
             return False, "Associado inativo no sistema"
         
-        if associado['status_adimplencia'] != 'adimplente':
+        # Verificar adimplência (compatível com ambos os formatos)
+        adimplente = False
+        if associado.get('adimplente') is not None:
+            # Formato do web service
+            adimplente = associado['adimplente']
+        elif associado.get('status_adimplencia'):
+            # Formato do banco local
+            adimplente = associado['status_adimplencia'] == 'adimplente'
+        
+        if not adimplente:
             return False, "Associado inadimplente com taxa sindical. Regularize sua situação para fazer reservas."
         
-        return True, "Associado adimplente"
+        origem = associado.get('origem', 'banco_local')
+        return True, f"Associado adimplente (verificado via {origem})"
     
     def criar_associado(self, dados: Dict) -> Dict:
         """Cria novo associado"""

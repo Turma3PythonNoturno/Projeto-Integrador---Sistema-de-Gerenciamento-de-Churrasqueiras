@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block titulo %}Web Service - SINT-IFESGO{% endblock %}
+
+{% block conteudo %}
+<h2 style="text-align: center; margin-bottom: 30px;">Integração com Web Service SINSIND</h2>
+
+<div id="mensagem" style="display: none;" class="alert"></div>
+
+<!-- Status do Web Service -->
+<div class="card" style="margin-bottom: 30px;">
+    <h3>Status do Serviço</h3>
+    <div id="status-container">
+        <button onclick="verificarStatus()" class="btn btn-primary">Verificar Status</button>
+        <div id="status-resultado" style="margin-top: 15px;"></div>
+    </div>
+</div>
+
+<!-- Teste de Consulta -->
+<div class="card">
+    <h3>Testar Consulta de Associado</h3>
+    <form id="form-teste" style="max-width: 500px;">
+        <div class="form-group">
+            <label for="cpf_teste">CPF para Teste:</label>
+            <input type="text" id="cpf_teste" name="cpf_teste" required maxlength="14" 
+                   placeholder="000.000.000-00">
+        </div>
+        
+        <div class="form-group">
+            <button type="submit" class="btn btn-success">Testar Consulta</button>
+            <button type="button" onclick="testarLocal()" class="btn btn-info">Testar Local</button>
+        </div>
+    </form>
+    
+    <div id="teste-resultado" style="margin-top: 20px;"></div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const formTeste = document.getElementById('form-teste');
+    const cpfInput = document.getElementById('cpf_teste');
+    const mensagemDiv = document.getElementById('mensagem');
+    
+    // Formatação do CPF
+    cpfInput.addEventListener('input', function(e) {
+        let cpf = e.target.value.replace(/\D/g, '');
+        cpf = cpf.replace(/(\d{3})(\d)/, '$1.$2');
+        cpf = cpf.replace(/(\d{3})(\d)/, '$1.$2');
+        cpf = cpf.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+        e.target.value = cpf;
+    });
+    
+    // Verificar status automaticamente ao carregar
+    verificarStatus();
+    
+    // Submissão do formulário de teste
+    formTeste.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const cpf = cpfInput.value.replace(/\D/g, '');
+        if (cpf.length !== 11) {
+            mostrarMensagem('CPF deve ter 11 dígitos', 'error');
+            return;
+        }
+        
+        testarWebService(cpf);
+    });
+});
+
+function verificarStatus() {
+    const statusDiv = document.getElementById('status-resultado');
+    statusDiv.innerHTML = '<div style="color: #666;">🔄 Verificando status...</div>';
+    
+    fetch('/api/webservice/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.sucesso) {
+                const status = data.status;
+                let html = '<div class="status-info">';
+                
+                if (status.disponivel) {
+                    html += '<div style="color: green; font-weight: bold;">✅ Web Service Disponível</div>';
+                } else {
+                    html += '<div style="color: red; font-weight: bold;">❌ Web Service Indisponível</div>';
+                }
+                
+                html += `<div><strong>URL:</strong> ${status.url || 'N/A'}</div>`;
+                html += `<div><strong>Status Code:</strong> ${status.status_code || 'N/A'}</div>`;
+                html += `<div><strong>Mensagem:</strong> ${status.mensagem}</div>`;
+                html += `<div><strong>Entradas no Cache:</strong> ${status.cache_entries}</div>`;
+                html += '</div>';
+                
+                statusDiv.innerHTML = html;
+            } else {
+                statusDiv.innerHTML = '<div style="color: red;">❌ Erro ao verificar status: ' + data.mensagem + '</div>';
+            }
+        })
+        .catch(error => {
+            statusDiv.innerHTML = '<div style="color: red;">❌ Erro de comunicação: ' + error.message + '</div>';
+        });
+}
+
+function testarWebService(cpf) {
+    const resultadoDiv = document.getElementById('teste-resultado');
+    resultadoDiv.innerHTML = '<div style="color: #666;">🔄 Testando consulta no web service...</div>';
+    
+    fetch(`/api/webservice/test/${cpf}`)
+        .then(response => response.json())
+        .then(data => {
+            let html = '<div class="teste-resultado">';
+            html += '<h4>🌐 Resultado do Web Service:</h4>';
+            
+            if (data.sucesso) {
+                html += '<div style="color: green; font-weight: bold;">✅ Consulta bem-sucedida</div>';
+                html += '<div><strong>Mensagem:</strong> ' + data.mensagem + '</div>';
+                
+                if (data.dados) {
+                    html += '<h5>Dados do Associado:</h5>';
+                    html += '<ul>';
+                    html += '<li><strong>CPF:</strong> ' + (data.dados.cpf_formatado || data.dados.cpf) + '</li>';
+                    html += '<li><strong>Nome:</strong> ' + (data.dados.nome || 'N/A') + '</li>';
+                    html += '<li><strong>Email:</strong> ' + (data.dados.email || 'N/A') + '</li>';
+                    html += '<li><strong>Telefone:</strong> ' + (data.dados.telefone || 'N/A') + '</li>';
+                    html += '<li><strong>Adimplente:</strong> ' + (data.dados.adimplente ? 'Sim' : 'Não') + '</li>';
+                    html += '<li><strong>Origem:</strong> ' + (data.dados.origem || 'web_service') + '</li>';
+                    html += '</ul>';
+                }
+            } else {
+                html += '<div style="color: red; font-weight: bold;">❌ Consulta falhou</div>';
+                html += '<div><strong>Mensagem:</strong> ' + data.mensagem + '</div>';
+            }
+            
+            html += '</div>';
+            resultadoDiv.innerHTML = html;
+        })
+        .catch(error => {
+            resultadoDiv.innerHTML = '<div style="color: red;">❌ Erro de comunicação: ' + error.message + '</div>';
+        });
+}
+
+function testarLocal() {
+    const cpf = document.getElementById('cpf_teste').value.replace(/\D/g, '');
+    if (cpf.length !== 11) {
+        mostrarMensagem('CPF deve ter 11 dígitos', 'error');
+        return;
+    }
+    
+    const resultadoDiv = document.getElementById('teste-resultado');
+    resultadoDiv.innerHTML = '<div style="color: #666;">🔄 Testando consulta local...</div>';
+    
+    fetch(`/api/associado/verificar/${cpf}`)
+        .then(response => response.json())
+        .then(data => {
+            let html = '<div class="teste-resultado">';
+            html += '<h4>💾 Resultado Local:</h4>';
+            
+            if (data.encontrado) {
+                html += '<div style="color: green; font-weight: bold;">✅ Associado encontrado localmente</div>';
+                html += '<div><strong>Adimplente:</strong> ' + (data.adimplente ? 'Sim' : 'Não') + '</div>';
+                html += '<div><strong>Mensagem:</strong> ' + data.mensagem + '</div>';
+                
+                if (data.associado) {
+                    html += '<h5>Dados do Associado:</h5>';
+                    html += '<ul>';
+                    html += '<li><strong>CPF:</strong> ' + (data.associado.cpf_formatado || data.associado.cpf) + '</li>';
+                    html += '<li><strong>Nome:</strong> ' + (data.associado.nome || 'N/A') + '</li>';
+                    html += '<li><strong>Email:</strong> ' + (data.associado.email || 'N/A') + '</li>';
+                    html += '<li><strong>Telefone:</strong> ' + (data.associado.telefone || 'N/A') + '</li>';
+                    html += '<li><strong>Status:</strong> ' + (data.associado.status_adimplencia || 'N/A') + '</li>';
+                    html += '</ul>';
+                }
+            } else {
+                html += '<div style="color: red; font-weight: bold;">❌ Associado não encontrado localmente</div>';
+                html += '<div><strong>Mensagem:</strong> ' + data.mensagem + '</div>';
+            }
+            
+            html += '</div>';
+            resultadoDiv.innerHTML = html;
+        })
+        .catch(error => {
+            resultadoDiv.innerHTML = '<div style="color: red;">❌ Erro de comunicação: ' + error.message + '</div>';
+        });
+}
+
+function mostrarMensagem(texto, tipo) {
+    const mensagemDiv = document.getElementById('mensagem');
+    mensagemDiv.className = `alert alert-${tipo}`;
+    mensagemDiv.innerHTML = texto;
+    mensagemDiv.style.display = 'block';
+    
+    setTimeout(() => {
+        mensagemDiv.style.display = 'none';
+    }, 5000);
+}
+</script>
+
+<style>
+.card {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.status-info div, .teste-resultado div {
+    margin: 8px 0;
+}
+
+.teste-resultado ul {
+    background: #fff;
+    padding: 15px;
+    border-radius: 4px;
+    border-left: 4px solid #007bff;
+}
+
+.teste-resultado h5 {
+    color: #495057;
+    margin-top: 15px;
+    margin-bottom: 10px;
+}
+</style>
+
+{% endblock %}

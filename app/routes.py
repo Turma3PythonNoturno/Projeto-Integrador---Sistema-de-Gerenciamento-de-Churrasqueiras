@@ -733,3 +733,48 @@ def api_upload_midia():
         
     except Exception as e:
         return jsonify({'sucesso': False, 'mensagem': f'Erro no upload: {str(e)}'}), 500
+
+
+@routes.route('/api/webservice/status')
+def api_webservice_status():
+    """API para verificar status do web service externo"""
+    try:
+        from app.services.webservice_sinsind import web_service_sinsind
+        status = web_service_sinsind.status_servico()
+        
+        return jsonify({
+            'sucesso': True,
+            'status': status
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': str(e)
+        }), 500
+
+
+@routes.route('/api/webservice/test/<cpf>')
+def api_webservice_test(cpf):
+    """API para testar consulta no web service externo"""
+    try:
+        from app.services.webservice_sinsind import web_service_sinsind
+        sucesso, dados, mensagem = web_service_sinsind.consultar_associado(cpf)
+        
+        return jsonify({
+            'sucesso': sucesso,
+            'dados': dados,
+            'mensagem': mensagem
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': str(e)
+        }), 500
+
+
+@routes.route('/webservice')
+def webservice():
+    """Página de administração do web service"""
+    return render_template('webservice.html')
