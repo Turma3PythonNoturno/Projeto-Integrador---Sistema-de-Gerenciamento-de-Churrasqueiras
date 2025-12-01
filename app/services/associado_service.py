@@ -207,6 +207,80 @@ class AssociadoService:
         import re
         return re.sub(r'[^\d]', '', cpf)
     
+    def importar_da_api(self, dados_api: Dict) -> Dict:
+        """
+        Importa ou atualiza associado a partir dos dados da API externa
+        Formato esperado: {
+            "codigo": "420",
+            "cpf": "27665747191",
+            "nome": "NOME DO ASSOCIADO",
+            "lotacao": null,
+            "categoria": "PENSIONISTA",
+            "situacao": "NÃO FILIADO",
+            "inadimplencia": "NÃO"
+        }
+        """
+        try:
+            # Limpar CPF
+            cpf_limpo = self._limpar_cpf(dados_api['cpf'])
+            
+            # Verificar se associado já existe
+            associado = Associado.query.filter_by(cpf=cpf_limpo).first()
+            
+            if associado:
+                # Atualizar dados existentes
+                associado.codigo = dados_api.get('codigo')
+                associado.nome = dados_api.get('nome')
+                associado.lotacao = dados_api.get('lotacao')
+                associado.categoria = dados_api.get('categoria')
+                associado.situacao = dados_api.get('situacao')
+                associado.inadimplencia = dados_api.get('inadimplencia', 'NÃO')
+                associado.data_ultima_sincronizacao = datetime.utcnow()
+                
+                db.session.commit()
+                
+                return {
+                    'sucesso': True,
+                    'acao': 'atualizado',
+                    'mensagem': 'Associado atualizado com sucesso',
+                    'associado': associado.to_dict()
+                }
+            else:
+                # Criar novo associado
+                novo_associado = Associado(
+                    codigo=dados_api.get('codigo'),
+                    cpf=cpf_limpo,
+                    nome=dados_api.get('nome'),
+                    lotacao=dados_api.get('lotacao'),
+                    categoria=dados_api.get('categoria'),
+                    situacao=dados_api.get('situacao'),
+                    inadimplencia=dados_api.get('inadimplencia', 'NÃO'),
+                    data_ultima_sincronizacao=datetime.utcnow(),
+                    ativo=True
+                )
+                
+                db.session.add(novo_associado)
+                db.session.commit()
+                
+                return {
+                    'sucesso': True,
+                    'acao': 'criado',
+                    'mensagem': 'Associado importado com sucesso',
+                    'associado': novo_associado.to_dict()
+                }
+                
+        except KeyError as e:
+            return {
+                'sucesso': False,
+                'mensagem': f'Campo obrigatório ausente: {str(e)}'
+            }
+        except Exception as e:
+            db.session.rollback()
+            return {
+                'sucesso': False,
+                'mensagem': f'Erro ao importar associado: {str(e)}'
+            }
+    
     def desativar_associado(self, cpf: str, motivo: str = None) -> Dict:
         """Desativa um associado"""
         try:

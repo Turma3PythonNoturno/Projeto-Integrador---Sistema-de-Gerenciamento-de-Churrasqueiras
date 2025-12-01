@@ -99,21 +99,52 @@ class Reserva(db.Model):
         return f'<Reserva {self.nome} em {self.data_reserva} das {self.horario_inicio} às {self.horario_fim}>'
     
     def to_dict(self):
-        return {
-            'id': self.id,
-            'nome': self.nome,
-            'email': self.email,
-            'telefone': self.telefone,
-            'data_reserva': self.data_reserva.strftime('%d/%m/%Y'),
-            'data_reserva_iso': self.data_reserva.strftime('%Y-%m-%d'),
-            'horario_inicio': self.horario_inicio.strftime('%H:%M'),
-            'horario_fim': self.horario_fim.strftime('%H:%M'),
-            'numero_convidados': self.numero_convidados,
-            'status': self.status,
-            'status_display': 'Ativa' if self.status == 'ativa' else 'Cancelada',
-            'data_criacao': self.data_criacao.strftime('%d/%m/%Y %H:%M'),
-            'observacoes': self.observacoes or ''
+        try:
+            return {
+                'id': self.id,
+                'nome': self.nome or '',
+                'email': self.email or '',
+                'telefone': self.telefone or '',
+                'cpf_associado': self.cpf_associado or '',
+                'data_reserva': self.data_reserva.strftime('%d/%m/%Y') if self.data_reserva else '',
+                'data_reserva_iso': self.data_reserva.strftime('%Y-%m-%d') if self.data_reserva else '',
+                'horario_inicio': self.horario_inicio.strftime('%H:%M') if self.horario_inicio else '',
+                'horario_fim': self.horario_fim.strftime('%H:%M') if self.horario_fim else '',
+                'numero_convidados': self.numero_convidados or 0,
+                'status': self.status or 'pendente',
+                'status_display': self._get_status_display(),
+                'data_criacao': self.data_criacao.strftime('%d/%m/%Y %H:%M') if self.data_criacao else '',
+                'observacoes': self.observacoes or ''
+            }
+        except Exception as e:
+            return {
+                'id': self.id,
+                'nome': str(self.nome) if self.nome else 'Erro',
+                'email': '',
+                'telefone': '',
+                'cpf_associado': '',
+                'data_reserva': '',
+                'data_reserva_iso': '',
+                'horario_inicio': '',
+                'horario_fim': '',
+                'numero_convidados': 0,
+                'status': 'erro',
+                'status_display': f'Erro: {str(e)}',
+                'data_criacao': '',
+                'observacoes': ''
+            }
+    
+    def _get_status_display(self):
+        """Retorna descrição amigável do status"""
+        status_map = {
+            'pendente': 'Pendente',
+            'paga': 'Paga',
+            'ativa': 'Ativa',
+            'cancelada': 'Cancelada',
+            'realizada': 'Realizada',
+            'vencida': 'Vencida'
         }
+        return status_map.get(self.status, 'Desconhecido')
     
     @classmethod
     def verificar_disponibilidade(cls, data_reserva, horario_inicio, horario_fim, excluir_id=None):
@@ -191,13 +222,20 @@ class Associado(db.Model):
     __tablename__ = 'associados'
     
     id = db.Column(db.Integer, primary_key=True)
+    codigo = db.Column(db.String(20), nullable=True, index=True)  # Código do associado na API
     cpf = db.Column(db.String(11), unique=True, nullable=False, index=True)
-    nome = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(100), nullable=False, unique=True)
+    nome = db.Column(db.String(200), nullable=False)
+    lotacao = db.Column(db.String(200), nullable=True)  # Lotação do servidor
+    categoria = db.Column(db.String(50), nullable=True)  # PENSIONISTA, SERVIDOR, etc
+    situacao = db.Column(db.String(50), nullable=True)  # FILIADO, NÃO FILIADO
+    inadimplencia = db.Column(db.String(10), default='NÃO')  # SIM, NÃO
+    
+    # Campos locais opcionais
+    email = db.Column(db.String(100), nullable=True)
     telefone = db.Column(db.String(20), nullable=True)
-    status_adimplencia = db.Column(db.String(20), default='adimplente')  # adimplente, inadimplente
     data_ultimo_pagamento = db.Column(db.Date, nullable=True)
     data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
+    data_ultima_sincronizacao = db.Column(db.DateTime, nullable=True)  # Última sincronização com API
     ativo = db.Column(db.Boolean, default=True)
     
     # Relacionamentos
@@ -213,9 +251,14 @@ class Associado(db.Model):
         cpf = self.cpf
         return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
     
+    @property
+    def status_adimplencia(self):
+        """Retorna status de adimplência baseado no campo inadimplencia"""
+        return 'inadimplente' if self.inadimplencia == 'SIM' else 'adimplente'
+    
     def is_adimplente(self):
         """Verifica se o associado está adimplente"""
-        return self.status_adimplencia == 'adimplente' and self.ativo
+        return self.inadimplencia != 'SIM' and self.ativo
     
     def pode_fazer_reserva(self):
         """Verifica se o associado pode fazer reserva"""
@@ -278,6 +321,13 @@ class Associado(db.Model):
                 except:
                     data_cadastro_str = str(self.data_cadastro)
             
+            data_sincronizacao_str = 'Nunca'
+            if self.data_ultima_sincronizacao:
+                try:
+                    data_sincronizacao_str = self.data_ultima_sincronizacao.strftime('%d/%m/%Y %H:%M')
+                except:
+                    data_sincronizacao_str = str(self.data_ultima_sincronizacao)
+            
             # CPF formatado seguro
             cpf_formatado_str = self.cpf
             try:
@@ -287,15 +337,21 @@ class Associado(db.Model):
             
             return {
                 'id': self.id,
+                'codigo': self.codigo or '',
                 'cpf': self.cpf or '',
                 'cpf_formatado': cpf_formatado_str,
                 'nome': self.nome or '',
+                'lotacao': self.lotacao or '',
+                'categoria': self.categoria or '',
+                'situacao': self.situacao or '',
+                'inadimplencia': self.inadimplencia or 'NÃO',
                 'email': self.email or '',
                 'telefone': self.telefone or '',
-                'status_adimplencia': self.status_adimplencia or 'adimplente',
-                'status_display': 'Adimplente' if (self.status_adimplencia == 'adimplente') else 'Inadimplente',
+                'status_adimplencia': self.status_adimplencia,
+                'status_display': 'Adimplente' if self.inadimplencia != 'SIM' else 'Inadimplente',
                 'data_ultimo_pagamento': data_ultimo_pagamento_str,
                 'data_cadastro': data_cadastro_str,
+                'data_ultima_sincronizacao': data_sincronizacao_str,
                 'ativo': self.ativo if self.ativo is not None else True,
                 'pode_reservar': self.is_adimplente()
             }

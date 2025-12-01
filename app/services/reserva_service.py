@@ -222,6 +222,12 @@ class ReservaService:
             'codigo_pagamento': resultado_taxa.get('taxa', {}).get('codigo_pagamento') if resultado_taxa['sucesso'] else None
         }
     
+    def listar_todas_reservas(self) -> List[Dict]:
+        """Lista todas as reservas do sistema"""
+        from app.models import Reserva
+        reservas = Reserva.query.order_by(Reserva.data_reserva.desc(), Reserva.horario_inicio.desc()).all()
+        return [reserva.to_dict() for reserva in reservas]
+    
     def listar_reservas_futuras(self, dias_futuro: int = 30) -> List[Dict]:
         """Lista reservas ativas para os próximos dias"""
         hoje = date.today()

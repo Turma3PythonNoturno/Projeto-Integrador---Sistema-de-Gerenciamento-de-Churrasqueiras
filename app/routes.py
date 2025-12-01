@@ -34,7 +34,14 @@ def nova_reserva():
 def listar_reservas():
     """Página para listar todas as reservas"""
     try:
-        reservas_data = reserva_service.listar_reservas_futuras()
+        # Listar TODAS as reservas, não apenas futuras
+        reservas_data = reserva_service.listar_todas_reservas()
+        
+        print(f"\n=== DEBUG RESERVAS ===")
+        print(f"Total de reservas encontradas: {len(reservas_data)}")
+        for r in reservas_data:
+            print(f"Reserva: {r.get('nome')} - {r.get('data_reserva')}")
+        print(f"=== FIM DEBUG ===\n")
         
         # Converter para objetos compatíveis com template
         reservas = []
@@ -52,6 +59,9 @@ def listar_reservas():
         
         return render_template('lista_reservas.html', reservas=reservas)
     except Exception as e:
+        print(f"\n!!! ERRO AO LISTAR RESERVAS: {str(e)}\n")
+        import traceback
+        traceback.print_exc()
         return render_template('lista_reservas.html', 
                              reservas=[], 
                              erro=f"Erro ao carregar reservas: {str(e)}")
@@ -214,13 +224,53 @@ def pagina_estatisticas():
 
 @routes.route('/associados')
 def listar_associados():
-    """Lista todos os associados"""
+    """Lista todos os associados - busca da API"""
     try:
-        associados = associado_service.listar_todos(apenas_ativos=False)
+        # Buscar dados da API
+        import requests
+        from config import Config
+        
+        config = Config()
+        payload = {
+            **config.WEB_SERVICE_CREDENTIALS,
+            "acao": "listar_associados"
+        }
+        
+        response = requests.post(
+            config.WEB_SERVICE_URL,
+            json=payload,
+            timeout=config.WEB_SERVICE_TIMEOUT,
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        associados = []
+        if response.status_code == 200:
+            data = response.json()
+            associados_raw = data.get('data', []) if data.get('status') == 'success' else data.get('associados', [])
+            
+            # Padronizar dados
+            for assoc in associados_raw:
+                cpf_limpo = ''.join(filter(str.isdigit, assoc.get('cpf', '')))
+                inadimplencia = str(assoc.get('inadimplencia', 'SIM') or 'SIM').upper()
+                
+                associados.append({
+                    'id': assoc.get('id'),
+                    'codigo': assoc.get('codigo', ''),
+                    'cpf': cpf_limpo,
+                    'cpf_formatado': f"{cpf_limpo[:3]}.{cpf_limpo[3:6]}.{cpf_limpo[6:9]}-{cpf_limpo[9:]}" if len(cpf_limpo) == 11 else cpf_limpo,
+                    'nome': assoc.get('nome', ''),
+                    'lotacao': assoc.get('lotacao', ''),
+                    'categoria': assoc.get('categoria', ''),
+                    'situacao': assoc.get('situacao', ''),
+                    'inadimplencia': inadimplencia,
+                    'status_adimplencia': 'adimplente' if inadimplencia == 'NÃO' else 'inadimplente',
+                    'status_display': 'Adimplente' if inadimplencia == 'NÃO' else 'Inadimplente',
+                    'pode_reservar': inadimplencia == 'NÃO'
+                })
         
         # Calcular estatísticas
         total = len(associados)
-        adimplentes = len([a for a in associados if a.get('status_adimplencia') == 'adimplente'])
+        adimplentes = len([a for a in associados if a['inadimplencia'] == 'NÃO'])
         inadimplentes = total - adimplentes
         
         estatisticas = {
@@ -230,10 +280,20 @@ def listar_associados():
             'percentual_adimplencia': round((adimplentes / total * 100) if total > 0 else 0, 1)
         }
         
+        print(f"\n=== ASSOCIADOS DA API ===")
+        print(f"Total: {total}")
+        print(f"Adimplentes: {adimplentes}")
+        print(f"Inadimplentes: {inadimplentes}")
+        print(f"=== FIM ===\n")
+        
         return render_template('associados.html', 
                              associados=associados, 
                              estatisticas=estatisticas)
     except Exception as e:
+        print(f"\n!!! ERRO: {str(e)}\n")
+        import traceback
+        traceback.print_exc()
+        
         # Estatísticas vazias em caso de erro
         estatisticas_vazia = {
             'total_associados': 0,
@@ -276,6 +336,54 @@ def criar_associado():
         return jsonify({
             'sucesso': False,
             'mensagem': f'Erro interno do servidor: {str(e)}'
+        }), 500
+
+
+@routes.route('/api/associado/importar-api', methods=['POST'])
+def importar_associado_api():
+    """API para importar associados da API externa"""
+    try:
+        dados = request.get_json()
+        
+        if not dados:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Dados JSON são obrigatórios'
+            }), 400
+        
+        # Se for uma lista de associados
+        if isinstance(dados, list):
+            importados = 0
+            atualizados = 0
+            erros = []
+            
+            for associado_api in dados:
+                try:
+                    resultado = associado_service.importar_da_api(associado_api)
+                    if resultado['sucesso']:
+                        if resultado.get('acao') == 'criado':
+                            importados += 1
+                        else:
+                            atualizados += 1
+                except Exception as e:
+                    erros.append(f"CPF {associado_api.get('cpf')}: {str(e)}")
+            
+            return jsonify({
+                'sucesso': True,
+                'importados': importados,
+                'atualizados': atualizados,
+                'erros': erros,
+                'mensagem': f'{importados} novos associados importados, {atualizados} atualizados'
+            })
+        else:
+            # Um único associado
+            resultado = associado_service.importar_da_api(dados)
+            return jsonify(resultado)
+            
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'Erro ao importar: {str(e)}'
         }), 500
 
 
@@ -586,8 +694,24 @@ def api_detalhes_associado(cpf):
         if not associado_dict:
             return jsonify({'sucesso': False, 'mensagem': 'Associado não encontrado'}), 404
         
-        # Adicionar informações extras se necessário
-        detalhes = associado_dict.copy()
+        # Garantir que todos os campos estejam presentes
+        detalhes = {
+            'cpf': associado_dict.get('cpf', ''),
+            'cpf_formatado': associado_dict.get('cpf_formatado', associado_dict.get('cpf', '')),
+            'nome': associado_dict.get('nome', ''),
+            'email': associado_dict.get('email', ''),
+            'telefone': associado_dict.get('telefone', ''),
+            'status_adimplencia': associado_dict.get('status_adimplencia', 'inadimplente'),
+            'status_display': 'Adimplente' if associado_dict.get('status_adimplencia') == 'adimplente' else 'Inadimplente',
+            'data_cadastro': associado_dict.get('data_cadastro', 'Não disponível'),
+            'data_ultimo_pagamento': associado_dict.get('data_ultimo_pagamento', 'Nunca'),
+            'pode_reservar': associado_dict.get('adimplente', False) or associado_dict.get('status_adimplencia') == 'adimplente',
+            'ativo': associado_dict.get('ativo', True),
+            'categoria': associado_dict.get('categoria', ''),
+            'lotacao': associado_dict.get('lotacao', ''),
+            'situacao': associado_dict.get('situacao', associado_dict.get('situacao_sindical', '')),
+            'origem': associado_dict.get('origem', 'desconhecida')
+        }
         
         return jsonify({'sucesso': True, 'detalhes': detalhes})
     except Exception as e:
@@ -683,6 +807,124 @@ def api_estatisticas_taxas():
     except Exception as e:
         return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
 
+
+@routes.route('/api/taxa/relatorio', methods=['GET'])
+def api_relatorio_taxas():
+    """API para gerar relatório de taxas"""
+    try:
+        periodo = request.args.get('periodo')  # Formato: YYYY-MM
+        
+        # Buscar todas as taxas
+        from app.models import Taxa
+        query = Taxa.query
+        
+        if periodo:
+            # Filtrar por período
+            try:
+                ano, mes = periodo.split('-')
+                query = query.filter(
+                    db.extract('year', Taxa.data_vencimento) == int(ano),
+                    db.extract('month', Taxa.data_vencimento) == int(mes)
+                )
+            except:
+                pass
+        
+        taxas = query.order_by(Taxa.data_vencimento.desc()).all()
+        
+        # Gerar relatório HTML simples
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Relatório de Taxas - SINT-IFESGO</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                h1 {{ color: #2d5016; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+                th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                th {{ background-color: #2d5016; color: white; }}
+                .pago {{ color: green; }}
+                .pendente {{ color: orange; }}
+                .vencido {{ color: red; }}
+            </style>
+        </head>
+        <body>
+            <h1>Relatório de Taxas - SINT-IFESGO</h1>
+            <p>Período: {periodo if periodo else 'Todos'}</p>
+            <p>Total de taxas: {len(taxas)}</p>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Associado</th>
+                        <th>Tipo</th>
+                        <th>Valor</th>
+                        <th>Vencimento</th>
+                        <th>Status</th>
+                        <th>Pagamento</th>
+                    </tr>
+                </thead>
+                <tbody>
+        """
+        
+        for taxa in taxas:
+            html += f"""
+                    <tr>
+                        <td>{taxa.codigo_pagamento}</td>
+                        <td>{taxa.associado_cpf}</td>
+                        <td>{taxa.tipo}</td>
+                        <td>R$ {taxa.valor:.2f}</td>
+                        <td>{taxa.data_vencimento.strftime('%d/%m/%Y')}</td>
+                        <td class="{taxa.status}">{taxa.status.upper()}</td>
+                        <td>{taxa.data_pagamento.strftime('%d/%m/%Y') if taxa.data_pagamento else '-'}</td>
+                    </tr>
+            """
+        
+        html += """
+                </tbody>
+            </table>
+        </body>
+        </html>
+        """
+        
+        return html
+    except Exception as e:
+        return f"<h1>Erro ao gerar relatório</h1><p>{str(e)}</p>", 500
+
+
+@routes.route('/api/taxa/verificar-vencimentos', methods=['GET'])
+def api_verificar_vencimentos():
+    """API para verificar e atualizar taxas vencidas"""
+    try:
+        from app.models import Taxa
+        from datetime import date
+        
+        hoje = date.today()
+        
+        # Buscar taxas pendentes que venceram
+        taxas_vencidas = Taxa.query.filter(
+            Taxa.status == 'pendente',
+            Taxa.data_vencimento < hoje
+        ).all()
+        
+        # Atualizar status para vencido
+        processadas = 0
+        for taxa in taxas_vencidas:
+            taxa.status = 'vencido'
+            processadas += 1
+        
+        db.session.commit()
+        
+        return jsonify({
+            'sucesso': True,
+            'vencidas': len(taxas_vencidas),
+            'processadas': processadas,
+            'mensagem': f'{processadas} taxa(s) marcada(s) como vencida(s)'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
 
 
 

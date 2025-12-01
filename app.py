@@ -34,11 +34,14 @@ def create_app():
         if total_associados == 0:
             print("Criando associado de teste...")
             associado_teste = Associado(
+                codigo='001',
                 cpf='12345678901',
                 nome='João da Silva Teste',
+                categoria='SERVIDOR',
+                situacao='FILIADO',
+                inadimplencia='NÃO',
                 email='joao.teste@sint.com.br',
                 telefone='(62) 99999-9999',
-                status_adimplencia='adimplente',
                 ativo=True
             )
             db.session.add(associado_teste)
