@@ -16,10 +16,20 @@ boletim_service = container.get_boletim_service()
 def inicio():
     """Página inicial do sistema SINT-IFESGO"""
     try:
-        # Buscar boletins urgentes para exibir na página inicial
-        boletins_urgentes = boletim_service.listar_boletins_urgentes()
-        return render_template('inicio.html', boletins_urgentes=boletins_urgentes)
+        # Buscar TODOS os boletins ativos para exibir na página inicial
+        boletins_ativos = boletim_service.listar_boletins_ativos()
+        
+        print(f"\n=== BOLETINS NA PÁGINA INICIAL ===")
+        print(f"Total de boletins ativos: {len(boletins_ativos)}")
+        for b in boletins_ativos:
+            print(f"- {b.get('titulo')} (prioridade: {b.get('prioridade')})")
+        print(f"=== FIM ===\n")
+        
+        return render_template('inicio.html', boletins_urgentes=boletins_ativos)
     except Exception as e:
+        print(f"\n!!! ERRO ao carregar boletins: {str(e)}\n")
+        import traceback
+        traceback.print_exc()
         return render_template('inicio.html', boletins_urgentes=[], 
                              erro=f"Erro ao carregar boletins: {str(e)}")
 
@@ -419,12 +429,22 @@ def verificar_associado(cpf):
 def listar_boletins():
     """Página para listar boletins informativos"""
     try:
-        boletins_data = boletim_service.listar_boletins_ativos()
+        # Listar TODOS os boletins (ativos e inativos)
+        boletins_data = boletim_service.listar_todos_boletins()
+        
+        print(f"\n=== BOLETINS ===")
+        print(f"Total de boletins: {len(boletins_data)}")
+        for b in boletins_data:
+            print(f"- {b.get('titulo')} (ativo: {b.get('ativo')})")
+        print(f"=== FIM ===")
         
         return render_template('boletins.html', 
                              boletins=boletins_data,
                              titulo="Boletins Informativos")
     except Exception as e:
+        print(f"\n!!! ERRO ao listar boletins: {str(e)}\n")
+        import traceback
+        traceback.print_exc()
         return render_template('boletins.html', 
                              boletins=[], 
                              erro=f"Erro ao carregar boletins: {str(e)}")

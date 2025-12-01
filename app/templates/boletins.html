@@ -48,14 +48,14 @@
 <div id="lista-boletins">
     {% if boletins %}
         {% for boletim in boletins %}
-        <div class="boletim-card" data-tipo="{{ boletim.tipo }}" data-prioridade="{{ boletim.prioridade }}" data-ativo="{{ boletim.is_ativo() | string | lower }}">
+        <div class="boletim-card" data-tipo="{{ boletim.tipo }}" data-prioridade="{{ boletim.prioridade }}" data-ativo="{{ boletim.ativo | string | lower }}">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
                 <div>
                     <h3 style="margin: 0 0 5px 0; color: #2c5234;">{{ boletim.titulo }}</h3>
                     <div style="display: flex; gap: 10px; margin-bottom: 10px;">
                         <span class="badge badge-{{ boletim.tipo }}">{{ boletim.tipo.title() }}</span>
                         <span class="badge badge-prioridade-{{ boletim.prioridade }}">{{ boletim.prioridade.title() }}</span>
-                        {% if not boletim.is_ativo() %}
+                        {% if not boletim.ativo %}
                         <span class="badge badge-inativo">Inativo</span>
                         {% endif %}
                     </div>
@@ -64,7 +64,7 @@
                     <button class="btn btn-sm" onclick="editarBoletim({{ boletim.id }})" style="background-color: #ffc107; color: #000;">
                         Editar
                     </button>
-                    {% if boletim.is_ativo() %}
+                    {% if boletim.ativo %}
                     <button class="btn btn-sm" onclick="desativarBoletim({{ boletim.id }})" style="background-color: #dc3545;">
                         Desativar
                     </button>
@@ -81,10 +81,10 @@
             </div>
             
             <div style="display: flex; justify-content: space-between; font-size: 0.9em; color: #666;">
-                <span>Publicado: {{ boletim.data_publicacao.strftime('%d/%m/%Y %H:%M') }}</span>
+                <span>Publicado: {{ boletim.data_publicacao }}</span>
                 <span>Destinatários: {{ boletim.destinatarios | title }}</span>
                 {% if boletim.data_expiracao %}
-                <span>Expira: {{ boletim.data_expiracao.strftime('%d/%m/%Y %H:%M') }}</span>
+                <span>Expira: {{ boletim.data_expiracao }}</span>
                 {% endif %}
             </div>
         </div>

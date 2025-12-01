@@ -57,6 +57,14 @@ class BoletimService:
                 'mensagem': f'Erro ao criar boletim: {str(e)}'
             }
     
+    def listar_todos_boletins(self) -> List[Dict]:
+        """Lista TODOS os boletins (ativos e inativos)"""
+        boletins = Boletim.query.order_by(
+            Boletim.data_publicacao.desc()
+        ).all()
+        
+        return [boletim.to_dict() for boletim in boletins]
+    
     def listar_boletins_ativos(self, cpf_associado: Optional[str] = None) -> List[Dict]:
         """Lista boletins ativos, opcionalmente filtrados para um associado específico"""
         # Buscar boletins ativos
