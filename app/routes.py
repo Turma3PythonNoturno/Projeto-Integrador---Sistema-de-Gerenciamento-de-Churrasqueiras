@@ -11,8 +11,11 @@ associado_service = container.get_associado_service()
 taxa_service = container.get_taxa_service()
 boletim_service = container.get_boletim_service()
 
-
 @routes.route('/')
+def login():
+    #Pagina de Login, vai ser exibida assim que for acessado o sistema.
+    return render_template('login.html')
+@routes.route('/inicio')
 def inicio():
     """Página inicial do sistema SINT-IFESGO"""
     try:

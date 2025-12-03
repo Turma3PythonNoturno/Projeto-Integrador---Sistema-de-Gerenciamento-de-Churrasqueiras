@@ -147,12 +147,15 @@
     </style>
 </head>
 <body>
+    {% block cabecalho %}
     <div class="header">
-        <h1>{% block cabecalho %}SINT-IFESGO{% endblock %}</h1>
+        <h1>SINT-IFESGO</h1>
         <p>Sistema de Reserva de Churrasqueira</p>
         <small>Sindicato dos Trabalhadores Técnico-Administrativos em Educação das IFES-GO</small>
     </div>
-    
+    {% endblock %}
+
+    {% block navbar %}
     <nav class="nav">
         <a href="{{ url_for('routes.inicio') }}">Início</a>
         <a href="{{ url_for('routes.nova_reserva') }}">Nova Reserva</a>
@@ -161,7 +164,7 @@
         <a href="{{ url_for('routes.listar_associados') }}">Associados</a>
         <a href="{{ url_for('routes.listar_taxas') }}">Taxas</a>
     </nav>
-    
+    {% endblock %}
     <div class="container">
         {% block conteudo %}{% endblock %}
     </div>
