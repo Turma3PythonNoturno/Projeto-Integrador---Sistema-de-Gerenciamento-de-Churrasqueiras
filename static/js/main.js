@@ -65,3 +65,19 @@ document.addEventListener('DOMContentLoaded', function() {
         buscarReservas();
     }
 });
+
+function mascaraCPF(i) {
+
+         console.log("O Script está sendo lido.")
+        var v = i.value;
+        
+        // Impede entrada de qualquer caractere que não seja número ou pontuação
+        if(isNaN(v[v.length-1])){ 
+           i.value = v.substring(0, v.length-1);
+           return;
+        }
+        
+        i.setAttribute("maxlength", "14");
+        if (v.length == 3 || v.length == 7) i.value += ".";
+        if (v.length == 11) i.value += "-";
+    }
