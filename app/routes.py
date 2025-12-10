@@ -1,7 +1,7 @@
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session, get_flashed_messages
 from datetime import datetime, date, time, timedelta
 from app.container import container
-from app.models import db, Reserva
+from app.models import db, Reserva, LoginSistema, Associado
 
 routes = Blueprint('routes', __name__)
 
@@ -11,10 +11,52 @@ associado_service = container.get_associado_service()
 taxa_service = container.get_taxa_service()
 boletim_service = container.get_boletim_service()
 
-@routes.route('/')
+@routes.route('/', methods=['GET', 'POST'])
 def login():
-    #Pagina de Login, vai ser exibida assim que for acessado o sistema.
+    if 'usuario_logado' in session:
+        return redirect(url_for('routes.inicio'))
+    
+    if request.method == 'POST':
+        # 1. Pega os dados do HTML
+        cpf_form = request.form.get('cpf_associado')
+        senha_form = request.form.get('password')
+
+        # 2. Limpeza do CPF (Remove pontos e traçõs para bater com o banco)
+        cpf_limpo = cpf_form.replace('.', '').replace('-', '')
+
+        # 3. Busca o usuário da tabela de login.
+        usuario_login = LoginSistema.query.filter_by(cpf=cpf_limpo).first()
+
+        # 4. Validação: Verifica se o usuário existe e se a senha está correta.
+        if usuario_login and usuario_login.verificar_senha(senha_form):
+            
+            # --- LOGIN SUCESSO---
+
+            #Criamos a "Sessão".
+            session['usuario_logado'] = True
+            session['cpf'] = usuario_login.cpf
+            session['is_admin'] = usuario_login.is_admin()
+
+            #Pega o nome através do relacionamento 'associado_obj' criado no Model
+            #o .split([0]) usado para pegar somente o primeiro nome para usar no menu.
+            nome_completo = usuario_login.associado_obj.nome
+            session['nome_usuario'] = nome_completo.split()[0]
+
+            flash(f'Bem-vindo(a), {session["nome_usuario"]}!', 'success')
+
+            return redirect(url_for('routes.inicio'))
+        
+        else:
+            flash('CPF ou senha incorretos.', 'danger')
+
     return render_template('login.html')
+
+@routes.route('/logout')
+def logout():
+    session.clear()
+    flash('Você saiu do sistema', 'info')
+    return redirect(url_for('routes.login'))
+
 @routes.route('/inicio')
 def inicio():
     """Página inicial do sistema SINT-IFESGO"""

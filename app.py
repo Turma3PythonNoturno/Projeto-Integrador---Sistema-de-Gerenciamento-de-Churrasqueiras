@@ -6,6 +6,9 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from config import Config
 
+app = Flask(__name__)
+app.secret_key = 'bfdpython'
+
 def create_app():
     """Factory function para criar e configurar a aplicação Flask."""
     app = Flask(__name__, 

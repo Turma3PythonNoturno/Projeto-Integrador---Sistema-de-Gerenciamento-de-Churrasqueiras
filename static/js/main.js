@@ -66,18 +66,23 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+
 function mascaraCPF(i) {
 
-         console.log("O Script está sendo lido.")
-        var v = i.value;
-        
-        // Impede entrada de qualquer caractere que não seja número ou pontuação
-        if(isNaN(v[v.length-1])){ 
-           i.value = v.substring(0, v.length-1);
-           return;
-        }
-        
-        i.setAttribute("maxlength", "14");
-        if (v.length == 3 || v.length == 7) i.value += ".";
-        if (v.length == 11) i.value += "-";
-    }
+    var v = i.value;
+    
+    v = v.replace(/\D/g, "");
+    
+    if (v.length > 11) v = v.slice(0, 11);
+
+    // Coloca um ponto entre o terceiro e o quarto dígitos
+    v = v.replace(/(\d{3})(\d)/, "$1.$2");
+    
+    // Coloca um ponto entre o terceiro e o quarto dígitos de novo (para o segundo bloco)
+    v = v.replace(/(\d{3})(\d)/, "$1.$2");
+    
+    // Coloca um hífen entre o terceiro e o quarto dígitos finais
+    v = v.replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+
+    i.value = v;
+}

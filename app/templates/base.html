@@ -156,6 +156,14 @@
     {% endblock %}
 
     {% block navbar %}
+
+    {% if session['usuario_logado'] %}
+        <span>Olá, {{ session['nome_usuario'] }}</span>
+        <a href="{{ url_for('routes.logout') }}">Sair</a>
+    {% else %}
+        <a href="{{ url_for('login') }}">Entrar</a>
+    {% endif %}
+
     <nav class="nav">
         <a href="{{ url_for('routes.inicio') }}">Início</a>
         <a href="{{ url_for('routes.nova_reserva') }}">Nova Reserva</a>

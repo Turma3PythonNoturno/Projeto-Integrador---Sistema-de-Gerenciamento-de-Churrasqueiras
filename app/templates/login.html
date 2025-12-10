@@ -13,7 +13,7 @@
 
     <div id="mensagem" style="display: none;" class="alert"></div>
 
-    <form id="form-reserva" style="max-width: 600px; margin: 0 auto;">
+    <form id="form-reserva" method="POST" style="max-width: 600px; margin: 0 auto;">
         
         <div class="form-group">
             <label for="cpf_associado">CPF do Associado *</label>
@@ -55,7 +55,7 @@
                 Entrar
             </button>
             <a href="{{ url_for('routes.inicio') }}" class="btn btn-secondary" style="text-decoration: none; margin-left: 10px;">
-                Cancelar
+                Esqueceu sua Senha?
             </a>
         </div>
 

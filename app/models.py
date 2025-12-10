@@ -27,9 +27,10 @@ Versão: 1.0
 """
 
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timezone
 from decimal import Decimal
 import re
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # Instância global do SQLAlchemy para uso em toda a aplicação
 db = SQLAlchemy()
@@ -241,6 +242,7 @@ class Associado(db.Model):
     # Relacionamentos
     reservas = db.relationship('Reserva', backref='associado_obj', lazy=True, foreign_keys='Reserva.cpf_associado')
     taxas = db.relationship('Taxa', backref='associado_obj', lazy=True, foreign_keys='Taxa.associado_cpf')
+    credencial = db.relationship('LoginSistema', backref='associado_obj', uselist=False, lazy=True, cascade="all, delete-orphan")
     
     def __repr__(self):
         return f'<Associado {self.nome} - CPF: {self.cpf_formatado}>'
@@ -534,3 +536,55 @@ class Boletim(db.Model):
             return 'alert-info'
         else:
             return 'alert-primary'
+        
+class LoginSistema(db.Model):
+    """
+    Modelo de Credenciais de Acesso.
+    
+    Gerencia o login e nível de permissão dos associados.
+    Relacionamento 1:1 com a tabela Associado através do CPF.
+    
+    Attributes:
+        id (int): Identificador interno
+        cpf (str): Chave estrangeira para Associado (Unique)
+        senha_hash (str): Hash seguro da senha
+        adm (int): Nível de permissão (0=Comum, 1=Admin)
+    """
+    __tablename__ = 'login_sistema'
+
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # Chave estrangeira ligando ao CPF da tabela associados
+    cpf = db.Column(db.String(11), db.ForeignKey('associados.cpf'), unique=True, nullable=False, comment='CPF do associado (Login)')
+    
+    senha_hash = db.Column(db.String(128), nullable=False, comment='Hash da senha')
+    adm = db.Column(db.Integer, default=0, comment='Nível de acesso: 0=Usuário, 1=Admin')
+    
+    data_criacao = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    ultimo_login = db.Column(db.DateTime, nullable=True)
+
+    def __repr__(self):
+        tipo = "Admin" if self.adm == 1 else "Usuário"
+        return f'<Login {self.cpf} - {tipo}>'
+
+    def definir_senha(self, senha):
+        """Gera o hash da senha antes de salvar"""
+        self.senha_hash = generate_password_hash(senha)
+
+    def verificar_senha(self, senha):
+        """Verifica se a senha em texto bate com o hash salvo"""
+        return check_password_hash(self.senha_hash, senha)
+    
+    def is_admin(self):
+        """Retorna True se for administrador"""
+        return self.adm == 1
+
+    def to_dict(self):
+        """Converte para dicionário (seguro, sem a senha)"""
+        return {
+            'cpf': self.cpf,
+            'is_admin': self.is_admin(),
+            'tipo_usuario': 'Administrador' if self.adm == 1 else 'Associado',
+            'data_criacao': self.data_criacao.strftime('%d/%m/%Y %H:%M') if self.data_criacao else '',
+            'ultimo_login': self.ultimo_login.strftime('%d/%m/%Y %H:%M') if self.ultimo_login else 'Nunca'
+        }
