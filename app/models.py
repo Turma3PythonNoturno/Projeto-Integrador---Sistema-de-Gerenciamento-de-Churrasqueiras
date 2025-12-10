@@ -506,3 +506,81 @@ class LoginSistema(db.Model):
             'data_criacao': self.data_criacao.strftime('%d/%m/%Y %H:%M') if self.data_criacao else '',
             'ultimo_login': self.ultimo_login.strftime('%d/%m/%Y %H:%M') if self.ultimo_login else 'Nunca'
         }
+
+
+class TokenRecuperacaoSenha(db.Model):
+    """
+    Modelo para tokens de recuperação de senha.
+    
+    Gera tokens únicos e temporários para recuperação de senha.
+    Tokens expiram em 1 hora por segurança.
+    
+    Attributes:
+        id (int): Identificador único
+        cpf (str): CPF do associado
+        token (str): Token único de 32 caracteres
+        data_criacao (datetime): Quando o token foi gerado
+        data_expiracao (datetime): Quando o token expira
+        usado (bool): Se o token já foi utilizado
+    """
+    __tablename__ = 'token_recuperacao_senha'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    cpf = db.Column(db.String(11), db.ForeignKey('associados.cpf'), nullable=False, comment='CPF do associado')
+    token = db.Column(db.String(64), unique=True, nullable=False, comment='Token único de recuperação')
+    data_criacao = db.Column(db.DateTime, default=datetime.now(timezone.utc), comment='Data de criação')
+    data_expiracao = db.Column(db.DateTime, nullable=False, comment='Data de expiração (1 hora)')
+    usado = db.Column(db.Boolean, default=False, comment='Se o token já foi usado')
+    
+    def __repr__(self):
+        return f'<TokenRecuperacaoSenha {self.cpf} - {self.token[:8]}...>'
+    
+    @staticmethod
+    def gerar_token():
+        """Gera um token aleatório de 32 caracteres"""
+        import secrets
+        return secrets.token_urlsafe(32)
+    
+    @classmethod
+    def criar_token(cls, cpf: str):
+        """Cria um novo token de recuperação para o CPF"""
+        # Invalidar tokens anteriores não usados
+        tokens_antigos = cls.query.filter_by(cpf=cpf, usado=False).all()
+        for token_antigo in tokens_antigos:
+            token_antigo.usado = True
+        
+        # Criar novo token válido por 1 hora
+        from datetime import timedelta
+        novo_token = cls(
+            cpf=cpf,
+            token=cls.gerar_token(),
+            data_expiracao=datetime.now(timezone.utc) + timedelta(hours=1)
+        )
+        
+        db.session.add(novo_token)
+        db.session.commit()
+        
+        return novo_token
+    
+    def is_valido(self) -> bool:
+        """Verifica se o token ainda é válido"""
+        if self.usado:
+            return False
+        if datetime.now(timezone.utc) > self.data_expiracao:
+            return False
+        return True
+    
+    def marcar_como_usado(self):
+        """Marca o token como usado"""
+        self.usado = True
+        db.session.commit()
+    
+    def to_dict(self):
+        """Converte para dicionário"""
+        return {
+            'cpf': self.cpf,
+            'token': self.token,
+            'valido': self.is_valido(),
+            'data_criacao': self.data_criacao.strftime('%d/%m/%Y %H:%M') if self.data_criacao else '',
+            'data_expiracao': self.data_expiracao.strftime('%d/%m/%Y %H:%M') if self.data_expiracao else ''
+        }

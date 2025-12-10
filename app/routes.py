@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session, get_flashed_messages
 from datetime import datetime, date, time, timedelta
 from app.container import container
-from app.models import db, Reserva, LoginSistema, Associado
+from app.models import db, Reserva, LoginSistema, Associado, TokenRecuperacaoSenha
 
 routes = Blueprint('routes', __name__)
 
@@ -55,6 +55,117 @@ def logout():
     session.clear()
     flash('Você saiu do sistema', 'info')
     return redirect(url_for('routes.login'))
+
+
+@routes.route('/esqueci-senha', methods=['GET', 'POST'])
+def esqueci_senha():
+    """Página para solicitar recuperação de senha"""
+    if request.method == 'POST':
+        cpf_form = request.form.get('cpf')
+        email_form = request.form.get('email')
+        
+        if not cpf_form or not email_form:
+            flash('CPF e email são obrigatórios', 'danger')
+            return render_template('esqueci_senha.html')
+        
+        # Limpa o CPF
+        cpf_limpo = cpf_form.replace('.', '').replace('-', '')
+        
+        # Verifica se o associado existe
+        associado = Associado.query.filter_by(cpf=cpf_limpo).first()
+        if not associado:
+            flash('CPF não encontrado no sistema', 'danger')
+            return render_template('esqueci_senha.html')
+        
+        # Verifica se o email está correto
+        if associado.email.lower() != email_form.lower():
+            flash('Email não corresponde ao cadastro', 'danger')
+            return render_template('esqueci_senha.html')
+        
+        # Verifica se existe login cadastrado
+        login = LoginSistema.query.filter_by(cpf=cpf_limpo).first()
+        if not login:
+            flash('Usuário não possui login cadastrado', 'danger')
+            return render_template('esqueci_senha.html')
+        
+        try:
+            # Gera token de recuperação
+            token_obj = TokenRecuperacaoSenha.criar_token(cpf_limpo)
+            
+            # TODO: Enviar email com link de recuperação
+            # Por enquanto, vamos exibir o link na tela (desenvolvimento)
+            link_recuperacao = url_for('routes.resetar_senha', token=token_obj.token, _external=True)
+            
+            flash(f'Link de recuperação gerado! Acesse: {link_recuperacao}', 'success')
+            # Em produção: enviar email e redirecionar para página de confirmação
+            # return redirect(url_for('routes.login'))
+            
+        except Exception as e:
+            flash(f'Erro ao gerar token: {str(e)}', 'danger')
+        
+        return render_template('esqueci_senha.html')
+    
+    return render_template('esqueci_senha.html')
+
+
+@routes.route('/resetar-senha/<token>', methods=['GET', 'POST'])
+def resetar_senha(token):
+    """Página para resetar senha com token"""
+    # Busca o token no banco
+    token_obj = TokenRecuperacaoSenha.query.filter_by(token=token).first()
+    
+    if not token_obj:
+        flash('Token inválido ou não encontrado', 'danger')
+        return redirect(url_for('routes.login'))
+    
+    if not token_obj.is_valido():
+        flash('Token expirado ou já utilizado. Solicite uma nova recuperação.', 'warning')
+        return redirect(url_for('routes.esqueci_senha'))
+    
+    if request.method == 'POST':
+        nova_senha = request.form.get('nova_senha')
+        confirma_senha = request.form.get('confirma_senha')
+        
+        # Validações
+        if not nova_senha or not confirma_senha:
+            flash('Preencha todos os campos', 'danger')
+            return render_template('resetar_senha.html', token=token)
+        
+        if len(nova_senha) < 6:
+            flash('A senha deve ter no mínimo 6 caracteres', 'danger')
+            return render_template('resetar_senha.html', token=token)
+        
+        if nova_senha != confirma_senha:
+            flash('As senhas não coincidem', 'danger')
+            return render_template('resetar_senha.html', token=token)
+        
+        try:
+            # Busca o login do usuário
+            login = LoginSistema.query.filter_by(cpf=token_obj.cpf).first()
+            if not login:
+                flash('Usuário não encontrado', 'danger')
+                return redirect(url_for('routes.login'))
+            
+            # Atualiza a senha
+            login.definir_senha(nova_senha)
+            
+            # Marca o token como usado
+            token_obj.marcar_como_usado()
+            
+            db.session.commit()
+            
+            flash('Senha alterada com sucesso! Faça login com sua nova senha.', 'success')
+            return redirect(url_for('routes.login'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao resetar senha: {str(e)}', 'danger')
+            return render_template('resetar_senha.html', token=token)
+    
+    # GET - exibe o formulário
+    associado = Associado.query.filter_by(cpf=token_obj.cpf).first()
+    return render_template('resetar_senha.html', token=token, nome=associado.nome if associado else 'Usuário')
+
 
 @routes.route('/inicio')
 def inicio():
