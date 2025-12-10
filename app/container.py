@@ -6,7 +6,6 @@ from app.validators.reserva_validator import ValidadorReserva
 from app.services.reserva_service import ReservaService
 from app.services.associado_service import AssociadoService
 from app.services.taxa_service import TaxaService
-from app.services.boletim_service import BoletimService
 from config import Config
 
 
@@ -52,12 +51,6 @@ class DependencyContainer:
         if 'taxa_service' not in self._instances:
             self._instances['taxa_service'] = TaxaService()
         return self._instances['taxa_service']
-    
-    def get_boletim_service(self) -> BoletimService:
-        """Retorna o serviço de boletins"""
-        if 'boletim_service' not in self._instances:
-            self._instances['boletim_service'] = BoletimService()
-        return self._instances['boletim_service']
     
     def clear_instances(self):
         """Limpa todas as instâncias (útil para testes)"""

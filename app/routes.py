@@ -9,7 +9,6 @@ routes = Blueprint('routes', __name__)
 reserva_service = container.get_reserva_service()
 associado_service = container.get_associado_service()
 taxa_service = container.get_taxa_service()
-boletim_service = container.get_boletim_service()
 
 @routes.route('/', methods=['GET', 'POST'])
 def login():
@@ -61,22 +60,12 @@ def logout():
 def inicio():
     """Página inicial do sistema SINT-IFESGO"""
     try:
-        # Buscar TODOS os boletins ativos para exibir na página inicial
-        boletins_ativos = boletim_service.listar_boletins_ativos()
-        
-        print(f"\n=== BOLETINS NA PÁGINA INICIAL ===")
-        print(f"Total de boletins ativos: {len(boletins_ativos)}")
-        for b in boletins_ativos:
-            print(f"- {b.get('titulo')} (prioridade: {b.get('prioridade')})")
-        print(f"=== FIM ===\n")
-        
-        return render_template('inicio.html', boletins_urgentes=boletins_ativos)
+        return render_template('inicio.html')
     except Exception as e:
-        print(f"\n!!! ERRO ao carregar boletins: {str(e)}\n")
+        print(f"\n!!! ERRO ao carregar página inicial: {str(e)}\n")
         import traceback
         traceback.print_exc()
-        return render_template('inicio.html', boletins_urgentes=[], 
-                             erro=f"Erro ao carregar boletins: {str(e)}")
+        return render_template('inicio.html', erro=f"Erro ao carregar página: {str(e)}")
 
 
 @routes.route('/nova-reserva')
@@ -470,63 +459,6 @@ def verificar_associado(cpf):
         }), 500
 
 
-@routes.route('/boletins')
-def listar_boletins():
-    """Página para listar boletins informativos"""
-    try:
-        # Listar TODOS os boletins (ativos e inativos)
-        boletins_data = boletim_service.listar_todos_boletins()
-        
-        print(f"\n=== BOLETINS ===")
-        print(f"Total de boletins: {len(boletins_data)}")
-        for b in boletins_data:
-            print(f"- {b.get('titulo')} (ativo: {b.get('ativo')})")
-        print(f"=== FIM ===")
-        
-        return render_template('boletins.html', 
-                             boletins=boletins_data,
-                             titulo="Boletins Informativos")
-    except Exception as e:
-        print(f"\n!!! ERRO ao listar boletins: {str(e)}\n")
-        import traceback
-        traceback.print_exc()
-        return render_template('boletins.html', 
-                             boletins=[], 
-                             erro=f"Erro ao carregar boletins: {str(e)}")
-
-
-@routes.route('/admin/boletim/novo')
-def novo_boletim():
-    """Página para criar novo boletim (admin)"""
-    return render_template('novo_boletim.html')
-
-
-@routes.route('/api/boletim/criar', methods=['POST'])
-def criar_boletim():
-    """API para criar novo boletim"""
-    try:
-        dados = request.get_json()
-        
-        if not dados:
-            return jsonify({
-                'sucesso': False,
-                'mensagem': 'Dados JSON são obrigatórios'
-            }), 400
-        
-        resultado = boletim_service.criar_boletim(dados)
-        
-        if resultado['sucesso']:
-            return jsonify(resultado), 201
-        else:
-            return jsonify(resultado), 400
-            
-    except Exception as e:
-        return jsonify({
-            'sucesso': False,
-            'mensagem': f'Erro interno do servidor: {str(e)}'
-        }), 500
-
-
 @routes.route('/taxas')
 def listar_taxas():
     """Lista taxas do sistema"""
@@ -614,13 +546,9 @@ def minha_conta(cpf):
         # Buscar taxas do associado
         taxas = taxa_service.listar_por_associado(cpf)
         
-        # Buscar boletins para o associado
-        boletins = boletim_service.listar_boletins_ativos(cpf)
-        
         return render_template('minha_conta.html', 
                              associado=associado,
-                             taxas=taxas,
-                             boletins=boletins)
+                             taxas=taxas)
         
     except Exception as e:
         return render_template('erro.html',
@@ -628,49 +556,6 @@ def minha_conta(cpf):
 
 
 # === ROTAS API PARA OS TEMPLATES ADMINISTRATIVOS ===
-
-@routes.route('/api/boletim/buscar', methods=['GET'])
-def api_buscar_boletim():
-    """API para buscar boletim por ID"""
-    boletim_id = request.args.get('id', type=int)
-    if not boletim_id:
-        return jsonify({'sucesso': False, 'mensagem': 'ID do boletim é obrigatório'}), 400
-    
-    boletim = boletim_service.buscar_por_id(boletim_id)
-    if not boletim:
-        return jsonify({'sucesso': False, 'mensagem': 'Boletim não encontrado'}), 404
-    
-    return jsonify({'sucesso': True, 'boletim': boletim})
-
-
-@routes.route('/api/boletim/editar', methods=['POST'])
-def api_editar_boletim():
-    """API para editar boletim"""
-    dados = request.get_json()
-    if not dados or not dados.get('id'):
-        return jsonify({'sucesso': False, 'mensagem': 'Dados incompletos'}), 400
-    
-    resultado = boletim_service.atualizar_boletim(dados['id'], dados)
-    return jsonify(resultado)
-
-
-@routes.route('/api/boletim/excluir', methods=['POST'])
-def api_excluir_boletim():
-    """API para excluir (desativar) boletim"""
-    dados = request.get_json()
-    if not dados or not dados.get('id'):
-        return jsonify({'sucesso': False, 'mensagem': 'ID do boletim é obrigatório'}), 400
-    
-    resultado = boletim_service.desativar_boletim(dados['id'])
-    return jsonify(resultado)
-
-
-@routes.route('/api/boletim/estatisticas', methods=['GET'])
-def api_estatisticas_boletim():
-    """API para obter estatísticas de boletins"""
-    stats = boletim_service.estatisticas()
-    return jsonify({'sucesso': True, 'estatisticas': stats})
-
 
 @routes.route('/api/associado/buscar', methods=['GET'])
 def api_buscar_associado():

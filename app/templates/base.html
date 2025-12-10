@@ -161,14 +161,13 @@
         <span>Olá, {{ session['nome_usuario'] }}</span>
         <a href="{{ url_for('routes.logout') }}">Sair</a>
     {% else %}
-        <a href="{{ url_for('login') }}">Entrar</a>
+        <a href="{{ url_for('routes.login') }}">Entrar</a>
     {% endif %}
 
     <nav class="nav">
         <a href="{{ url_for('routes.inicio') }}">Início</a>
         <a href="{{ url_for('routes.nova_reserva') }}">Nova Reserva</a>
         <a href="{{ url_for('routes.listar_reservas') }}">Ver Reservas</a>
-        <a href="{{ url_for('routes.listar_boletins') }}">Boletins</a>
         <a href="{{ url_for('routes.listar_associados') }}">Associados</a>
         <a href="{{ url_for('routes.listar_taxas') }}">Taxas</a>
     </nav>

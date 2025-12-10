@@ -8,19 +8,20 @@ Modelos implementados:
 1. Associado - Dados dos membros do sindicato
 2. Reserva - Reservas de churrasqueira
 3. Taxa - Sistema de cobrança de taxas
-4. Boletim - Sistema de comunicados
+4. LoginSistema - Sistema de autenticação
 
 Relacionamentos:
 - Associado -> Reservas (1:N)
 - Associado -> Taxas (1:N) 
 - Reserva -> Taxas (1:N)
-- Boletim (independente)
+- LoginSistema -> Associado (1:1)
 
 Regras de negócio implementadas:
 - Validação de CPF brasileiro
 - Controle de adimplência sindical
 - Gestão de status de reservas
 - Sistema de cobrança de taxas
+- Autenticação de usuários
 
 Autor: Sistema SINT-IFESGO
 Versão: 1.0
@@ -453,89 +454,6 @@ class Taxa(db.Model):
         }
         return status_map.get(self.status, self.status.title())
 
-
-class Boletim(db.Model):
-    """Modelo para Boletins Informativos do SINT-IFESGO"""
-    __tablename__ = 'boletins'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    titulo = db.Column(db.String(200), nullable=False)
-    conteudo = db.Column(db.Text, nullable=False)
-    tipo = db.Column(db.String(20), default='geral')  # geral, urgente, comunicado, evento
-    prioridade = db.Column(db.String(20), default='normal')  # baixa, normal, alta, critica
-    data_publicacao = db.Column(db.DateTime, default=datetime.utcnow)
-    data_expiracao = db.Column(db.DateTime, nullable=True)
-    ativo = db.Column(db.Boolean, default=True)
-    autor = db.Column(db.String(100), nullable=True)
-    destinatarios = db.Column(db.String(20), default='todos')  # todos, adimplentes, inadimplentes
-    
-    def __repr__(self):
-        return f'<Boletim {self.titulo} - {self.tipo}>'
-    
-    def is_ativo(self):
-        """Verifica se o boletim está ativo"""
-        if not self.ativo:
-            return False
-        
-        # Verifica se não expirou
-        if self.data_expiracao and datetime.utcnow() > self.data_expiracao:
-            return False
-        
-        return True
-    
-    def is_urgente(self):
-        """Verifica se é boletim urgente"""
-        return self.prioridade in ['alta', 'critica'] or self.tipo == 'urgente'
-    
-    def deve_notificar_associado(self, status_adimplencia: str):
-        """Verifica se deve notificar associado baseado no status"""
-        if self.destinatarios == 'todos':
-            return True
-        
-        if self.destinatarios == 'adimplentes' and status_adimplencia == 'adimplente':
-            return True
-        
-        if self.destinatarios == 'inadimplentes' and status_adimplencia == 'inadimplente':
-            return True
-        
-        return False
-    
-    def resumo(self, max_chars: int = 100):
-        """Retorna resumo do conteúdo"""
-        if len(self.conteudo) <= max_chars:
-            return self.conteudo
-        
-        return self.conteudo[:max_chars] + "..."
-    
-    def to_dict(self):
-        """Converte para dicionário"""
-        return {
-            'id': self.id,
-            'titulo': self.titulo,
-            'conteudo': self.conteudo,
-            'resumo': self.resumo(),
-            'tipo': self.tipo,
-            'prioridade': self.prioridade,
-            'data_publicacao': self.data_publicacao.strftime('%d/%m/%Y %H:%M') if self.data_publicacao else '',
-            'data_expiracao': self.data_expiracao.strftime('%d/%m/%Y %H:%M') if self.data_expiracao else None,
-            'ativo': self.ativo,
-            'is_ativo': self.is_ativo(),
-            'is_urgente': self.is_urgente(),
-            'autor': self.autor or 'SINT-IFESGO',
-            'destinatarios': self.destinatarios,
-            'classe_css': self._get_classe_css()
-        }
-    
-    def _get_classe_css(self):
-        """Retorna classe CSS baseada no tipo e prioridade"""
-        if self.prioridade == 'critica':
-            return 'alert-danger'
-        elif self.prioridade == 'alta' or self.tipo == 'urgente':
-            return 'alert-warning'
-        elif self.tipo == 'evento':
-            return 'alert-info'
-        else:
-            return 'alert-primary'
         
 class LoginSistema(db.Model):
     """
