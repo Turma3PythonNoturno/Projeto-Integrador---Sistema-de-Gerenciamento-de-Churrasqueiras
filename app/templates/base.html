@@ -168,8 +168,10 @@
         <a href="{{ url_for('routes.inicio') }}">Início</a>
         <a href="{{ url_for('routes.nova_reserva') }}">Nova Reserva</a>
         <a href="{{ url_for('routes.listar_reservas') }}">Ver Reservas</a>
+        {% if session.get('is_admin') %}
         <a href="{{ url_for('routes.listar_associados') }}">Associados</a>
         <a href="{{ url_for('routes.listar_taxas') }}">Taxas</a>
+        {% endif %}
     </nav>
     {% endblock %}
     <div class="container">

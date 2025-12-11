@@ -62,14 +62,15 @@ def esqueci_senha():
     """Página para solicitar recuperação de senha"""
     if request.method == 'POST':
         cpf_form = request.form.get('cpf')
-        email_form = request.form.get('email')
+        telefone_form = request.form.get('telefone')
         
-        if not cpf_form or not email_form:
-            flash('CPF e email são obrigatórios', 'danger')
+        if not cpf_form or not telefone_form:
+            flash('CPF e telefone são obrigatórios', 'danger')
             return render_template('esqueci_senha.html')
         
-        # Limpa o CPF
+        # Limpa o CPF e telefone
         cpf_limpo = cpf_form.replace('.', '').replace('-', '')
+        telefone_limpo = telefone_form.replace('(', '').replace(')', '').replace(' ', '').replace('-', '')
         
         # Verifica se o associado existe
         associado = Associado.query.filter_by(cpf=cpf_limpo).first()
@@ -77,9 +78,10 @@ def esqueci_senha():
             flash('CPF não encontrado no sistema', 'danger')
             return render_template('esqueci_senha.html')
         
-        # Verifica se o email está correto
-        if associado.email.lower() != email_form.lower():
-            flash('Email não corresponde ao cadastro', 'danger')
+        # Verifica se o telefone está correto
+        telefone_cadastrado = associado.telefone.replace('(', '').replace(')', '').replace(' ', '').replace('-', '') if associado.telefone else ''
+        if telefone_cadastrado != telefone_limpo:
+            flash('Telefone não corresponde ao cadastro', 'danger')
             return render_template('esqueci_senha.html')
         
         # Verifica se existe login cadastrado
@@ -96,9 +98,15 @@ def esqueci_senha():
             # Por enquanto, vamos exibir o link na tela (desenvolvimento)
             link_recuperacao = url_for('routes.resetar_senha', token=token_obj.token, _external=True)
             
-            flash(f'Link de recuperação gerado! Acesse: {link_recuperacao}', 'success')
-            # Em produção: enviar email e redirecionar para página de confirmação
-            # return redirect(url_for('routes.login'))
+            # Preparar telefone para WhatsApp (remove formatação)
+            telefone_whatsapp = associado.telefone.replace('(', '').replace(')', '').replace(' ', '').replace('-', '') if associado.telefone else None
+            
+            # Retorna para a página com o link gerado
+            return render_template('esqueci_senha.html', 
+                                 link_gerado=link_recuperacao,
+                                 telefone_whatsapp=telefone_whatsapp,
+                                 nome_associado=associado.nome,
+                                 sucesso=True)
             
         except Exception as e:
             flash(f'Erro ao gerar token: {str(e)}', 'danger')
@@ -573,42 +581,44 @@ def verificar_associado(cpf):
 @routes.route('/taxas')
 def listar_taxas():
     """Lista taxas do sistema"""
-    try:
-        cpf_associado = request.args.get('cpf')  # Opcional
-        
-        if cpf_associado:
-            taxas = taxa_service.listar_por_associado(cpf_associado)
-        else:
-            taxas = taxa_service.listar_taxas_pendentes()
-        
-        # Calcular estatísticas básicas para o template
-        total_recebido = sum(float(t.get('valor', 0)) for t in taxas if t.get('status') == 'pago')
-        total_pendente = sum(float(t.get('valor', 0)) for t in taxas if t.get('status') == 'pendente')
-        total_vencido = sum(float(t.get('valor', 0)) for t in taxas if t.get('is_vencida', False))
-        
-        estatisticas = {
-            'total_recebido': total_recebido,
-            'total_pendente': total_pendente,
-            'total_vencido': total_vencido,
-            'total_taxas': len(taxas)
-        }
-        
-        return render_template('taxas.html', 
-                             taxas=taxas, 
-                             cpf_filtro=cpf_associado,
-                             estatisticas=estatisticas)
-    except Exception as e:
-        # Estatísticas vazias em caso de erro
-        estatisticas = {
-            'total_recebido': 0,
-            'total_pendente': 0,
-            'total_vencido': 0,
-            'total_taxas': 0
-        }
-        return render_template('taxas.html', 
-                             taxas=[], 
-                             erro=f"Erro ao carregar taxas: {str(e)}",
-                             estatisticas=estatisticas)
+    cpf_associado = request.args.get('cpf')  # Opcional
+    
+    # Lista TODAS as taxas, não apenas as pendentes
+    if cpf_associado:
+        taxas = taxa_service.listar_por_associado(cpf_associado)
+    else:
+        taxas = taxa_service.listar_todas_taxas()
+    
+    print(f"\n=== DEBUG TAXAS ===")
+    print(f"Total de taxas encontradas: {len(taxas)}")
+    print(f"Taxas: {taxas}")
+    
+    # Calcular estatísticas básicas para o template
+    total_recebido = sum(float(t.get('valor', 0)) for t in taxas if t.get('status') == 'pago')
+    total_pendente = sum(float(t.get('valor', 0)) for t in taxas if t.get('status') == 'pendente')
+    total_vencido = sum(float(t.get('valor', 0)) for t in taxas if t.get('status') == 'vencido')
+    
+    print(f"\n=== ESTATÍSTICAS CALCULADAS ===")
+    print(f"Total Recebido: R$ {total_recebido}")
+    print(f"Total Pendente: R$ {total_pendente}")
+    print(f"Total Vencido: R$ {total_vencido}")
+    print(f"Total de Taxas: {len(taxas)}")
+    
+    estatisticas = {
+        'total_recebido': total_recebido,
+        'total_pendente': total_pendente,
+        'total_vencido': total_vencido,
+        'total_taxas': len(taxas)
+    }
+    
+    print(f"\n=== ANTES DO RENDER ===")
+    print(f"Estatísticas sendo enviadas: {estatisticas}")
+    print(f"Taxas sendo enviadas: {len(taxas)} itens")
+    
+    return render_template('taxas.html', 
+                         taxas=taxas, 
+                         cpf_filtro=cpf_associado,
+                         estatisticas=estatisticas)
 
 
 @routes.route('/api/taxa/confirmar-pagamento-old', methods=['POST'])
@@ -834,6 +844,28 @@ def api_confirmar_pagamento_taxa():
         return jsonify(resultado)
     except Exception as e:
         return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+
+
+@routes.route('/api/taxa/detalhes/<int:taxa_id>', methods=['GET'])
+def api_detalhes_taxa(taxa_id):
+    """API para obter detalhes de uma taxa"""
+    try:
+        taxa_obj = taxa_service.obter_por_id(taxa_id)
+        if taxa_obj:
+            return jsonify({
+                'sucesso': True,
+                'taxa': taxa_obj
+            })
+        else:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Taxa não encontrada'
+            }), 404
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'Erro ao buscar taxa: {str(e)}'
+        }), 500
 
 
 @routes.route('/api/taxa/estatisticas', methods=['GET'])

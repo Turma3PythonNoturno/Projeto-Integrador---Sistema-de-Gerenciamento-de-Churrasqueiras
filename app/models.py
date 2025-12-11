@@ -427,6 +427,27 @@ class Taxa(db.Model):
     
     def to_dict(self):
         """Converte para dicionário"""
+        # Buscar nome do associado (primeiro na API, depois no banco local)
+        associado_nome = None
+        if self.associado_cpf:
+            # Limpar CPF para busca (remover formatação)
+            cpf_limpo = self.associado_cpf.replace('.', '').replace('-', '') if '.' in self.associado_cpf or '-' in self.associado_cpf else self.associado_cpf
+            
+            # Tentar buscar na API primeiro
+            try:
+                from app.services.webservice_sinsind import web_service_sinsind
+                sucesso, dados_ws, _ = web_service_sinsind.consultar_associado(cpf_limpo)
+                if sucesso and dados_ws:
+                    associado_nome = dados_ws.get('nome')
+            except Exception:
+                pass
+            
+            # Se não encontrou na API, buscar no banco local
+            if not associado_nome:
+                associado = Associado.query.filter_by(cpf=cpf_limpo).first()
+                if associado:
+                    associado_nome = associado.nome
+        
         return {
             'id': self.id,
             'valor': float(self.valor),
@@ -438,6 +459,7 @@ class Taxa(db.Model):
             'data_pagamento': self.data_pagamento.strftime('%d/%m/%Y %H:%M') if self.data_pagamento else None,
             'reserva_id': self.reserva_id,
             'associado_cpf': self.associado_cpf,
+            'associado_nome': associado_nome,
             'codigo_pagamento': self.codigo_pagamento,
             'observacoes': self.observacoes or '',
             'data_criacao': self.data_criacao.strftime('%d/%m/%Y %H:%M') if self.data_criacao else '',

@@ -1,6 +1,7 @@
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, date, timedelta
 from decimal import Decimal
+import re
 from app.models import db, Taxa
 from config import Config
 
@@ -10,6 +11,12 @@ class TaxaService:
     
     def __init__(self):
         self.config = Config()
+    
+    def _limpar_cpf(self, cpf: str) -> str:
+        """Remove formatação do CPF"""
+        if not cpf:
+            return cpf
+        return re.sub(r'[^\d]', '', cpf)
     
     def gerar_taxa_reserva(self, reserva_id: int, cpf_associado: str) -> Dict:
         """Gera uma nova taxa de reserva"""
@@ -26,14 +33,14 @@ class TaxaService:
                     'mensagem': 'Já existe uma taxa gerada para esta reserva'
                 }
             
-            # Criar nova taxa
+            # Criar nova taxa (limpar CPF para manter consistência com banco de associados)
             nova_taxa = Taxa(
                 valor=Decimal(str(self.config.TAXA_RESERVA['valor'])),
                 tipo='reserva',
                 status='pendente',
                 data_vencimento=date.today() + timedelta(days=1),  # 24h para pagamento
                 reserva_id=reserva_id,
-                associado_cpf=cpf_associado
+                associado_cpf=self._limpar_cpf(cpf_associado)
             )
             
             # Gerar código de pagamento
@@ -102,6 +109,30 @@ class TaxaService:
             return taxa.to_dict()
         
         return None
+    
+    def obter_por_id(self, taxa_id: int) -> Optional[Dict]:
+        """Obtém uma taxa pelo ID"""
+        taxa = Taxa.query.get(taxa_id)
+        if taxa:
+            return taxa.to_dict()
+        return None
+    
+    def listar_todas_taxas(self, cpf_associado: Optional[str] = None) -> List[Dict]:
+        """Lista todas as taxas do sistema"""
+        query = Taxa.query
+        
+        if cpf_associado:
+            query = query.filter_by(associado_cpf=cpf_associado)
+        
+        taxas = query.all()
+        print(f"\n=== DEBUG taxa_service.listar_todas_taxas ===")
+        print(f"Total de taxas encontradas: {len(taxas)}")
+        for taxa in taxas:
+            print(f"  Taxa #{taxa.id}: R$ {taxa.valor} - Status: {taxa.status} - CPF: {taxa.associado_cpf}")
+        
+        result = [taxa.to_dict() for taxa in taxas]
+        print(f"Resultado convertido para dict: {len(result)} itens")
+        return result
     
     def listar_taxas_pendentes(self, cpf_associado: Optional[str] = None) -> List[Dict]:
         """Lista taxas pendentes, opcionalmente filtradas por associado"""

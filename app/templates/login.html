@@ -11,6 +11,12 @@
 
     <h2 style="text-align: center; margin-bottom: 30px; margin-top: auto; font-size: 40px;">Login</h2>
 
+    <div style="background-color: #d1ecf1; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #17a2b8; max-width: 600px; margin-left: auto; margin-right: auto;">
+        <p style="margin: 0; color: #0c5460; font-size: 14px; text-align: center;">
+            ℹ️ <strong>Usuário de Teste:</strong> CPF: 123.456.789-01 | Senha: admin123
+        </p>
+    </div>
+
     <div id="mensagem" style="display: none;" class="alert"></div>
 
     <form id="form-reserva" method="POST" style="max-width: 600px; margin: 0 auto;">
@@ -26,7 +32,8 @@
                 minlength="14" 
                 maxlength="14" 
                 autocomplete="username" 
-                placeholder="000.000.000-00" 
+                placeholder="000.000.000-00"
+                value="123.456.789-01"
                 oninput="mascaraCPF(this)"
                 class="form-control"
             >
@@ -44,6 +51,7 @@
                 required 
                 maxlength="16"
                 placeholder="(Máximo de 16 caracteres)"
+                value="admin123"
                 class="form-control"
             >
             <small style="color: #666;">Digite sua senha. </small>

@@ -32,7 +32,7 @@ def create_app():
         print(f"Local do banco: {app.config['SQLALCHEMY_DATABASE_URI']}")
         
         # Verificar e criar associado de teste se necessário
-        from app.models import Associado
+        from app.models import Associado, LoginSistema
         total_associados = Associado.query.count()
         if total_associados == 0:
             print("Criando associado de teste...")
@@ -52,6 +52,28 @@ def create_app():
             print("Associado de teste criado!")
         else:
             print(f"Banco já contém {total_associados} associado(s)")
+        
+        # Criar usuário administrador de teste se não existir
+        admin_login = LoginSistema.query.filter_by(cpf='12345678901').first()
+        if not admin_login:
+            print("Criando usuário administrador de teste...")
+            admin = LoginSistema(
+                cpf='12345678901',
+                adm=1  # Nível administrador
+            )
+            admin.definir_senha('admin123')  # Senha: admin123
+            db.session.add(admin)
+            db.session.commit()
+            print("=" * 50)
+            print("USUÁRIO ADMINISTRADOR CRIADO!")
+            print("=" * 50)
+            print("CPF: 123.456.789-01")
+            print("Senha: admin123")
+            print("Nível: Administrador")
+            print("=" * 50)
+        else:
+            print("Usuário administrador já existe")
+            print("CPF: 123.456.789-01 | Senha: admin123")
     
     return app
 
