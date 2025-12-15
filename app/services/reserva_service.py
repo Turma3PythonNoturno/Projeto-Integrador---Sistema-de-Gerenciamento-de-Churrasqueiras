@@ -171,8 +171,9 @@ class ReservaService:
             }
         
         # 6. Verificar disponibilidade
+        churrasqueira_id = int(dados_reserva.get('churrasqueira_id', 0))
         disponivel, mensagem_disponibilidade = self._repositorio.verificar_disponibilidade(
-            data_reserva, horario_inicio, horario_fim
+            data_reserva, horario_inicio, horario_fim, churrasqueira_id
         )
         if not disponivel:
             return {

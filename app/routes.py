@@ -59,11 +59,12 @@ def listar_reservas():
             # Criar um objeto simples que tem o método to_dict
             class ReservaView:
                 def __init__(self, data):
+                    self._data = data
                     for key, value in data.items():
                         setattr(self, key, value)
                 
                 def to_dict(self):
-                    return reserva_dict
+                    return self._data
             
             reservas.append(ReservaView(reserva_dict))
         
