@@ -13,6 +13,7 @@ class ReservaRepository(IReservaRepository):
         try:
             nova_reserva = ReservaModel(
                 nome=reserva_data['nome'],
+                churrasqueira_id=reserva_data['churrasqueira_id'],  
                 data_reserva=reserva_data['data_reserva'],
                 horario_inicio=reserva_data['horario_inicio'],
                 horario_fim=reserva_data['horario_fim'],

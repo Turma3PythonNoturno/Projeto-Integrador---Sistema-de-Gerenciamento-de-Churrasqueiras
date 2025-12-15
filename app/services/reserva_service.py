@@ -183,6 +183,7 @@ class ReservaService:
         # 7. Preparar dados para o repositório - incluindo CPF do associado
         dados_para_criacao = {
             'nome': dados_reserva['nome'].strip(),
+            'churrasqueira_id': int(dados_reserva['churrasqueira_id']),
 
             'cpf_associado': cpf_associado,
             'data_reserva': data_reserva,
