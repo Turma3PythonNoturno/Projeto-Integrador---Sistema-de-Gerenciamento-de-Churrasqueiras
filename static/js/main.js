@@ -249,4 +249,53 @@ document.addEventListener('DOMContentLoaded', function() {
             mensagemDiv.style.display = "block";
             console.error(err);
         });
+
+    // ------------------------------
+    // CANCELAMENTO DE RESERVAS
+    // ------------------------------
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('button[data-action="cancelar"]');
+        if (!btn) return;
+
+        const reservaId = btn.getAttribute('data-id');
+        if (!reservaId) return;
+
+        // Confirmação pelo usuário
+        if (!confirm('tem certeza que deseja cancelar a reserva')) return;
+
+        // Desabilitar botão enquanto processa
+        btn.disabled = true;
+
+        fetch(`/api/cancelar-reserva/${reservaId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.sucesso) {
+                // Atualizar badge de status
+                const statusEl = document.getElementById(`status-${reservaId}`);
+                if (statusEl) {
+                    statusEl.textContent = 'Cancelada';
+                    statusEl.style.backgroundColor = '#6c757d';
+                }
+
+                // Atualizar botão
+                btn.textContent = 'Cancelado';
+                btn.style.opacity = '0.6';
+                btn.disabled = true;
+
+                alert(data.mensagem || 'Reserva cancelada com sucesso');
+            } else {
+                alert(data.mensagem || 'Não foi possível cancelar a reserva');
+                btn.disabled = false;
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Erro ao cancelar reserva');
+            btn.disabled = false;
+        });
+    });
     });
