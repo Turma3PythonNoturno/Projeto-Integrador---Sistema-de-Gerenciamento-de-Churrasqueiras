@@ -44,6 +44,18 @@ class ValidadorReserva(IValidadorReserva):
         )
         if not convidados_valido:
             return False, convidados_msg
+
+        # Validar churrasqueira selecionada
+        try:
+            ch_id = int(dados.get('churrasqueira_id'))
+            if ch_id <= 0:
+                return False, "Churrasqueira inválida"
+            # Verificar existência
+            from app.models import Churrasqueira
+            if not Churrasqueira.query.get(ch_id):
+                return False, "Churrasqueira não encontrada"
+        except (ValueError, TypeError):
+            return False, "Churrasqueira inválida"
         
         return True, "Dados válidos"
     

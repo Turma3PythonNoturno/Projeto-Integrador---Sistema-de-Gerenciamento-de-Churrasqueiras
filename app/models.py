@@ -79,6 +79,13 @@ class Reserva(db.Model):
     cpf_associado = db.Column(db.String(11), db.ForeignKey('associados.cpf'), nullable=True, 
                              comment='CPF do associado responsável')
     
+    churrasqueira_id = db.Column(
+        db.Integer,
+        db.ForeignKey("churrasqueiras.id"),
+        nullable=False,
+        comment="Churrasqueira reservada"
+    )
+    
     # Dados temporais da reserva
     data_reserva = db.Column(db.Date, nullable=False, comment='Data da reserva')
     horario_inicio = db.Column(db.Time, nullable=False, comment='Horário de início')
@@ -98,23 +105,26 @@ class Reserva(db.Model):
     taxas = db.relationship('Taxa', backref='reserva_obj', lazy=True)
     
     def __repr__(self):
-        return f'<Reserva {self.nome} em {self.data_reserva} das {self.horario_inicio} às {self.horario_fim}>'
+        return f'<Reserva {self.nome} em {self.data_reserva} das {self.horario_inicio} às {self.horario_fim} da churrasqueira: {self.churrasqueira_id}>'
+    
     
     def to_dict(self):
-        try:
+        try: 
             return {
                 'id': self.id,
                 'nome': self.nome or '',
                 'email': self.email or '',
                 'telefone': self.telefone or '',
                 'cpf_associado': self.cpf_associado or '',
+                'churrasqueira_id': self.churrasqueira_id or '',
+                'churrasqueira_nome': getattr(self.churrasqueira, 'nome', '') if hasattr(self, 'churrasqueira') else '',
                 'data_reserva': self.data_reserva.strftime('%d/%m/%Y') if self.data_reserva else '',
                 'data_reserva_iso': self.data_reserva.strftime('%Y-%m-%d') if self.data_reserva else '',
                 'horario_inicio': self.horario_inicio.strftime('%H:%M') if self.horario_inicio else '',
                 'horario_fim': self.horario_fim.strftime('%H:%M') if self.horario_fim else '',
-                'numero_convidados': self.numero_convidados or 0,
-                'status': self.status or 'pendente',
-                'status_display': self._get_status_display(),
+                'numero_convidados': self.numero_convidados,
+                'status': self.status,
+                'status_display': self._get_status_display() if hasattr(self, '_get_status_display') else self.status,
                 'data_criacao': self.data_criacao.strftime('%d/%m/%Y %H:%M') if self.data_criacao else '',
                 'observacoes': self.observacoes or ''
             }
@@ -125,6 +135,8 @@ class Reserva(db.Model):
                 'email': '',
                 'telefone': '',
                 'cpf_associado': '',
+                'churrasqueira_id': None,
+                'churrasqueira_nome': '',
                 'data_reserva': '',
                 'data_reserva_iso': '',
                 'horario_inicio': '',
@@ -135,7 +147,7 @@ class Reserva(db.Model):
                 'data_criacao': '',
                 'observacoes': ''
             }
-    
+
     def _get_status_display(self):
         """Retorna descrição amigável do status"""
         status_map = {
@@ -148,48 +160,48 @@ class Reserva(db.Model):
         }
         return status_map.get(self.status, 'Desconhecido')
     
+   
     @classmethod
-    def verificar_disponibilidade(cls, data_reserva, horario_inicio, horario_fim, excluir_id=None):
-        """
-        Verifica se há conflito de horários para uma data específica
-        """
+    def verificar_disponibilidade(cls, data_reserva, horario_inicio, horario_fim, churrasqueira_id, excluir_id=None):
         query = cls.query.filter(
             cls.data_reserva == data_reserva,
-            cls.status == 'ativa'
+            cls.churrasqueira_id == churrasqueira_id,
+            cls.status.in_(('ativa', 'paga', 'pendente'))
         )
-        
+
         if excluir_id:
             query = query.filter(cls.id != excluir_id)
-        
+
         reservas_existentes = query.all()
-        
+
         for reserva in reservas_existentes:
-            # Verifica sobreposição de horários
             if (horario_inicio < reserva.horario_fim and horario_fim > reserva.horario_inicio):
-                return False, f"Conflito com reserva existente: {reserva.horario_inicio.strftime('%H:%M')} - {reserva.horario_fim.strftime('%H:%M')} ({reserva.nome})"
-        
+                return False, (
+                    f"Conflito com reserva existente "
+                    f"{reserva.horario_inicio.strftime('%H:%M')} - {reserva.horario_fim.strftime('%H:%M')} "
+                    f"({reserva.nome})"
+                )
+
         return True, "Horário disponível"
-    
+
+
     @classmethod
-    def obter_horarios_ocupados(cls, data_reserva):
-        """
-        Retorna lista de horários ocupados para uma data
-        """
+    def obter_horarios_ocupados(cls, data_reserva, churrasqueira_id):
         reservas = cls.query.filter(
             cls.data_reserva == data_reserva,
-            cls.status == 'ativa'
+            cls.churrasqueira_id == churrasqueira_id,
+            cls.status.in_(('ativa', 'paga', 'pendente'))
         ).all()
-        
-        horarios_ocupados = []
-        for reserva in reservas:
-            horarios_ocupados.append({
-                'inicio': reserva.horario_inicio.strftime('%H:%M'),
-                'fim': reserva.horario_fim.strftime('%H:%M'),
-                'nome': reserva.nome
-            })
-        
-        return horarios_ocupados
-    
+
+        return [
+            {
+                'inicio': r.horario_inicio.strftime('%H:%M'),
+                'fim': r.horario_fim.strftime('%H:%M'),
+                'nome': r.nome
+            }
+            for r in reservas
+        ]
+
     def cancelar_reserva(self, motivo=None):
         """
         Cancela a reserva
@@ -217,6 +229,26 @@ class Reserva(db.Model):
             return False, "Cancelamento deve ser feito com pelo menos 24h de antecedência"
         
         return True, "Reserva pode ser cancelada"
+    
+
+class Churrasqueira(db.Model):
+    __tablename__ = "churrasqueiras"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False)
+
+    descricao = db.Column(db.String(255), nullable=True)
+    capacidade = db.Column(db.Integer, nullable=True)
+    foto_url = db.Column(db.String(255), nullable=True)
+
+    reservas = db.relationship("Reserva", backref="churrasqueira", lazy=True)
+
+    def __repr__(self):
+        return f"<Churrasqueira {self.nome}>"
+
+
+
+
 
 
 class Associado(db.Model):

@@ -13,6 +13,7 @@ class ReservaRepository(IReservaRepository):
         try:
             nova_reserva = ReservaModel(
                 nome=reserva_data['nome'],
+                churrasqueira_id=reserva_data['churrasqueira_id'],  
                 data_reserva=reserva_data['data_reserva'],
                 horario_inicio=reserva_data['horario_inicio'],
                 horario_fim=reserva_data['horario_fim'],
@@ -63,21 +64,65 @@ class ReservaRepository(IReservaRepository):
         except Exception:
             return []
     
-    def verificar_disponibilidade(self, data: date, inicio: time, fim: time) -> Tuple[bool, str]:
-        """Verifica disponibilidade de horário"""
+    def verificar_disponibilidade(self, data: date, inicio: time, fim: time, churrasqueira_id: Optional[int] = None) -> Tuple[bool, str]:
+        """Verifica disponibilidade de horário.
+
+        Se churrasqueira_id for fornecido, verifica APENAS aquele equipamento.
+        Se não for, verifica se HÁ ALGUM equipamento livre (lógica original).
+        """
         try:
-            reservas_existentes = ReservaModel.query.filter(
+            # Se foi especificada uma churrasqueira, a verificação é direta
+            if churrasqueira_id:
+                reservas_conflitantes = ReservaModel.query.filter(
+                    ReservaModel.data_reserva == data,
+                    ReservaModel.churrasqueira_id == churrasqueira_id,
+                    ReservaModel.status.in_(('ativa', 'pendente', 'paga')),
+                    ReservaModel.horario_inicio < fim,
+                    ReservaModel.horario_fim > inicio
+                ).all()
+
+                if reservas_conflitantes:
+                    detalhes = []
+                    for r in reservas_conflitantes:
+                        detalhes.append(f"{r.horario_inicio.strftime('%H:%M')} - {r.horario_fim.strftime('%H:%M')} ({r.nome})")
+                    return False, f"Churrasqueira ocupada neste horário: {'; '.join(detalhes)}"
+                
+                return True, "Horário disponível"
+
+            # === Lógica para 'Qualquer Churrasqueira' (usada na busca inicial) ===
+            
+            # Buscar todas as churrasqueiras cadastradas
+            from app.models import Churrasqueira
+
+            todas_ids = [c.id for c in Churrasqueira.query.all()]
+
+            # Reservas ativas/pagas/pendentes que conflitam no dia e horário
+            reservas_conflitantes = ReservaModel.query.filter(
                 ReservaModel.data_reserva == data,
-                ReservaModel.status == 'ativa'
+                ReservaModel.status.in_(('ativa', 'pendente', 'paga')),
+                ReservaModel.horario_inicio < fim,
+                ReservaModel.horario_fim > inicio
             ).all()
-            
-            for reserva in reservas_existentes:
-                # Verifica sobreposição de horários
-                if (inicio < reserva.horario_fim and fim > reserva.horario_inicio):
-                    return False, f"Conflito com reserva existente: {reserva.horario_inicio.strftime('%H:%M')} - {reserva.horario_fim.strftime('%H:%M')} ({reserva.nome})"
-            
-            return True, "Horário disponível"
-            
+
+            # IDs das churrasqueiras que estão ocupadas nesse período
+            ids_ocupadas = {r.churrasqueira_id for r in reservas_conflitantes}
+
+            # Se existir ao menos uma churrasqueira livre -> disponível
+            ids_disponiveis = [cid for cid in todas_ids if cid not in ids_ocupadas]
+
+            if len(ids_disponiveis) > 0:
+                return True, "Horário disponível"
+
+            # Caso todas ocupadas, construir mensagem de conflito com detalhes
+            mensagem = "Todos os equipamentos estão ocupados neste horário"
+            if reservas_conflitantes:
+                detalhes = []
+                for r in reservas_conflitantes:
+                    detalhes.append(f"{r.horario_inicio.strftime('%H:%M')} - {r.horario_fim.strftime('%H:%M')} ({r.nome})")
+                mensagem = "Conflito: " + "; ".join(detalhes)
+
+            return False, mensagem
+
         except Exception as e:
             return False, f"Erro ao verificar disponibilidade: {str(e)}"
     

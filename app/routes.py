@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session, get_flashed_messages
 from datetime import datetime, date, time, timedelta
 from app.container import container
-from app.models import db, Reserva, LoginSistema, Associado, TokenRecuperacaoSenha
+from app.models import db, Reserva, Churrasqueira,LoginSistema, Associado, TokenRecuperacaoSenha
 
 routes = Blueprint('routes', __name__)
 
@@ -212,11 +212,12 @@ def listar_reservas():
             # Criar um objeto simples que tem o método to_dict
             class ReservaView:
                 def __init__(self, data):
+                    self._data = data
                     for key, value in data.items():
                         setattr(self, key, value)
                 
                 def to_dict(self):
-                    return reserva_dict
+                    return self._data
             
             reservas.append(ReservaView(reserva_dict))
         
@@ -266,6 +267,13 @@ def criar_reserva():
             return jsonify({
                 'sucesso': False, 
                 'mensagem': 'Dados JSON são obrigatórios'
+            }), 400
+
+        # 🔥 VALIDAÇÃO IMPORTANTE
+        if "churrasqueira_id" not in dados or not str(dados["churrasqueira_id"]).strip():
+            return jsonify({
+                "sucesso": False,
+                "mensagem": "Você deve selecionar uma churrasqueira."
             }), 400
         
         resultado = reserva_service.criar_reserva(dados)
@@ -1111,5 +1119,113 @@ def api_webservice_test(cpf):
 
 @routes.route('/webservice')
 def webservice():
+
     """Página de administração do web service"""
     return render_template('webservice.html')
+
+
+@routes.route("/reservas/horarios_disponiveis", methods=["GET"])
+def horarios_disponiveis():
+    data = request.args.get("data")
+
+    if not data:
+        return jsonify({"disponiveis": [], "erro": "Data não informada"}), 400
+
+    # Converter data
+    try:
+        data_obj = datetime.strptime(data, "%Y-%m-%d").date()
+    except ValueError:
+        return jsonify({"disponiveis": [], "erro": "Data inválida"}), 400
+
+    # Buscar todas as churrasqueiras
+    churrasqueiras = Churrasqueira.query.all()
+
+    resultado = []
+
+    for churrasqueira in churrasqueiras:
+        
+        # Busca reservas daquela churrasqueira no dia informado
+        reservas = Reserva.query.filter(
+            Reserva.data_reserva == data_obj,
+            Reserva.churrasqueira_id == churrasqueira.id,
+            Reserva.status.in_(('ativa', 'pendente', 'paga'))
+        ).all()
+
+        # Lista com horários ocupados
+        ocupados = [
+            {
+                "inicio": r.horario_inicio.strftime("%H:%M"),
+                "fim": r.horario_fim.strftime("%H:%M"),
+                "responsavel": r.nome
+            }
+            for r in reservas
+        ]
+
+        # Inserção no resultado final
+        resultado.append({
+            "churrasqueira_id": churrasqueira.id,
+            "churrasqueira_nome": churrasqueira.nome,
+            "ocupados": ocupados
+        })
+
+    return jsonify({"disponiveis": resultado}), 200
+
+@routes.route("/reservas/disponiveis", methods=["GET"])
+def churrasqueiras_disponiveis():
+    try:
+        data_str = request.args.get("data")
+        inicio_str = request.args.get("inicio")
+        fim_str = request.args.get("fim")
+
+        if not data_str or not inicio_str or not fim_str:
+            return jsonify({"erro": "Parâmetros insuficientes"}), 400
+
+        # Converter
+        data = datetime.strptime(data_str, "%Y-%m-%d").date()
+        inicio = datetime.strptime(inicio_str, "%H:%M").time()
+        fim = datetime.strptime(fim_str, "%H:%M").time()
+
+        # Buscar todas
+        todas = Churrasqueira.query.all()
+        ids_todas = [c.id for c in todas]
+
+        # Buscar reservas conflitantes
+        conflitos = Reserva.query.filter(
+            Reserva.data_reserva == data,
+            Reserva.status.in_(('ativa', 'pendente', 'paga')),
+            Reserva.horario_inicio < fim,
+            Reserva.horario_fim > inicio
+        ).all()
+
+        ids_ocupadas = [r.churrasqueira_id for r in conflitos]
+
+        # Filtrar as disponíveis
+        ids_disponiveis = [cid for cid in ids_todas if cid not in ids_ocupadas]
+
+        disponiveis = Churrasqueira.query.filter(
+            Churrasqueira.id.in_(ids_disponiveis)
+        ).all()
+
+        return jsonify({
+            "disponiveis": [
+                {"id": c.id, "nome": c.nome}
+                for c in disponiveis
+            ],
+            "total": len(disponiveis)
+        })
+
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+
+
+@routes.route("/debug/churrasqueiras")
+def debug_churrasqueiras():
+    lista = Churrasqueira.query.all()
+    return {
+        "total": len(lista),
+        "itens": [
+            {"id": c.id, "nome": c.nome}
+            for c in lista
+        ]
+    }

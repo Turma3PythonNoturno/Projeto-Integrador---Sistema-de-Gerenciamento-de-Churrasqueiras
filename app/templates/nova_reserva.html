@@ -44,24 +44,36 @@
 
         <div class="form-group">
             <label for="data_reserva">Data da Reserva *</label>
-            <input type="date" id="data_reserva" name="data_reserva" required>
+            <!-- <input type="date" id="data_reserva" name="data_reserva" required> -->
+            <input type="date" id="data_reserva" name="data_reserva" required onchange="verificarDisponibilidade()">
+
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-            <div class="form-group">
-                <label for="horario_inicio">Horário de Início *</label>
-                <select id="horario_inicio" name="horario_inicio" required>
-                    <option value="">Selecione...</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="horario_fim">Horário de Término *</label>
-                <select id="horario_fim" name="horario_fim" required>
-                    <option value="">Selecione...</option>
-                </select>
-            </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div class="form-group">
+            <label for="horario_inicio">Horário de Início *</label>
+            <select id="horario_inicio" name="horario_inicio" required onchange="verificarDisponibilidade()">
+                <option value="">Selecione...</option>
+            </select>
         </div>
+
+        <div class="form-group">
+            <label for="horario_fim">Horário de Término *</label>
+            <select id="horario_fim" name="horario_fim" required onchange="verificarDisponibilidade()">
+                <option value="">Selecione...</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="churrasqueira_id">Churrasqueira *</label>
+        <select id="churrasqueira_id" name="churrasqueira_id" required>
+            <option value="">Selecione a data e horário primeiro...</option>
+        </select>
+    </div>
+
+    <div id="debug-id" style="margin-top: 8px; font-size: 14px; color: #444; font-weight: bold;"></div>
+
 
         <div class="form-group">
             <label for="numero_convidados">Número de Convidados</label>
@@ -93,14 +105,15 @@
         </div>
 
         <div style="text-align: center; margin-top: 30px;">
-            <button type="submit" class="btn">
+            <button type="submit" id="botao-submit" class="btn" disabled>
                 Criar Reserva
             </button>
             <a href="{{ url_for('routes.inicio') }}" class="btn btn-secondary" style="text-decoration: none; margin-left: 10px;">
                 Cancelar
             </a>
         </div>
-    </form>
+
+</form>
     {% endblock %}
 
     {% block scripts %}
@@ -120,6 +133,9 @@
         const emailInput = document.getElementById('email');
         const telefoneInput = document.getElementById('telefone');
         const statusAssociadoDiv = document.getElementById('status-associado');
+
+        // Elemento para validar churrasqueiras
+        const churrasqueira_id = document.getElementById('churrasqueira_id');
 
         // Definir data mínima como amanhã
         const hoje = new Date();
@@ -256,6 +272,8 @@
             }
         });
 
+        
+
         // Verificar disponibilidade quando os campos mudarem
         function verificarDisponibilidade() {
             const data = dataReserva.value;
@@ -266,6 +284,8 @@
                 verificacaoDiv.style.display = 'none';
                 return;
             }
+
+            atualizarChurrasqueiras();
 
             verificacaoDiv.style.display = 'block';
             resultadoDiv.innerHTML = 'Verificando disponibilidade...';
@@ -302,6 +322,59 @@
                     console.error('Erro:', error);
                 });
         }
+
+
+        function atualizarChurrasqueiras() {
+            const data = document.getElementById("data_reserva").value;
+            const inicio = document.getElementById("horario_inicio").value;
+            const fim = document.getElementById("horario_fim").value;
+            const select = document.getElementById("churrasqueira_id");
+
+            if (!data || !inicio || !fim) {
+                return; // Espera todos os campos serem preenchidos
+            }
+
+            console.log("Buscando churrasqueiras disponíveis...");
+
+            fetch(`/reservas/disponiveis?data=${data}&inicio=${inicio}&fim=${fim}`)
+                .then(r => r.json())
+                .then(json => {
+                    console.log("Resposta:", json);
+
+                    select.innerHTML = '<option value="">Selecione...</option>';
+
+                    if (!json.disponiveis || json.disponiveis.length === 0) {
+                        select.innerHTML = '<option value="">Nenhuma disponível</option>';
+                        return;
+                    }
+
+                    json.disponiveis.forEach(ch => {
+                        const op = document.createElement("option");
+                        op.value = ch.id;
+                        op.textContent = ch.nome;
+                        select.appendChild(op);
+                    });
+                })
+                .catch(err => console.error("Erro ao buscar disponíveis:", err));
+        }
+
+        document.getElementById("churrasqueira_id").addEventListener("change", function () {
+            const debug = document.getElementById("debug-id");
+            const valor = this.value;
+
+            if (valor) {
+                debug.textContent = "ID selecionado: " + valor;
+
+                // HABILITAR O BOTÃO AUTOMATICAMENTE
+                document.getElementById("botao-submit").disabled = false;
+            } else {
+                debug.textContent = "Nenhuma churrasqueira selecionada";
+                document.getElementById("botao-submit").disabled = true;
+            }
+        });
+
+
+
 
         dataReserva.addEventListener('change', verificarDisponibilidade);
         horarioInicio.addEventListener('change', verificarDisponibilidade);

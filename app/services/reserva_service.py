@@ -171,8 +171,9 @@ class ReservaService:
             }
         
         # 6. Verificar disponibilidade
+        churrasqueira_id = int(dados_reserva.get('churrasqueira_id', 0))
         disponivel, mensagem_disponibilidade = self._repositorio.verificar_disponibilidade(
-            data_reserva, horario_inicio, horario_fim
+            data_reserva, horario_inicio, horario_fim, churrasqueira_id
         )
         if not disponivel:
             return {
@@ -183,6 +184,7 @@ class ReservaService:
         # 7. Preparar dados para o repositório - incluindo CPF do associado
         dados_para_criacao = {
             'nome': dados_reserva['nome'].strip(),
+            'churrasqueira_id': int(dados_reserva['churrasqueira_id']),
 
             'cpf_associado': cpf_associado,
             'data_reserva': data_reserva,
