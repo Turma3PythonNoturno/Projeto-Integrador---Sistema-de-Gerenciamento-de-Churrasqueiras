@@ -27,7 +27,8 @@ def create_app():
     from app.models import (
         Associado,
         Churrasqueira,
-        Reserva
+        Reserva,
+        LoginSistema
     )
 
     # Registro dos blueprints
@@ -45,9 +46,11 @@ def create_app():
         if total_churrasqueiras == 0:
             print("Criando churrasqueiras padrão...")
             lista = [
-                Churrasqueira(nome="Churrasqueira 1"),
-                Churrasqueira(nome="Churrasqueira 2"),
-                Churrasqueira(nome="Churrasqueira 3"),
+                Churrasqueira(nome="Churrasqueira Bosque"),
+                Churrasqueira(nome="Churrasqueira Araguaia"),
+                Churrasqueira(nome="Churrasqueira Asufesgo"),
+                Churrasqueira(nome="Churrasqueira Sint-UFG"),
+                Churrasqueira(nome="Churrasqueira Sint-Ifes")
             ]
             db.session.add_all(lista)
             db.session.commit()
