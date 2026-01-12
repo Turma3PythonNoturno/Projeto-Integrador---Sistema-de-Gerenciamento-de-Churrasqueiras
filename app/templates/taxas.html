@@ -3,6 +3,14 @@
 {% block titulo %}Gestão de Taxas - SINT-IFESGO{% endblock %}
 
 {% block conteudo %}
+
+<!-- DEBUG: Verificar valores recebidos -->
+<script>
+console.log("=== DEBUG TEMPLATE ===");
+console.log("Estatísticas:", {{ estatisticas | tojson }});
+console.log("Taxas:", {{ taxas | tojson }});
+</script>
+
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
     <h2>Gestão de Taxas e Pagamentos</h2>
     <div style="display: flex; gap: 10px;">
@@ -96,16 +104,18 @@
                     data-cpf="{{ taxa.associado_cpf }}"
                     data-status="{{ taxa.status }}"
                     data-tipo="{{ taxa.tipo }}"
-                    data-vencimento="{{ taxa.data_vencimento.isoformat() if taxa.data_vencimento else '' }}">
+                    data-vencimento="{{ taxa.data_vencimento if taxa.data_vencimento else '' }}">
                     <td style="padding: 15px; font-family: monospace; font-weight: bold; color: #2c5234;">
                         {{ taxa.codigo_pagamento }}
                     </td>
                     <td style="padding: 15px;">
-                        {% if taxa.associado_obj %}
-                            <strong>{{ taxa.associado_obj.nome }}</strong><br>
-                            <small style="color: #666;">{{ taxa.associado_obj.cpf_formatado }}</small>
+                        {% if taxa.associado_nome %}
+                            <strong>{{ taxa.associado_nome }}</strong><br>
+                            <small style="color: #666;">CPF: {{ taxa.associado_cpf }}</small>
+                        {% elif taxa.associado_cpf %}
+                            <small style="color: #666;">CPF: {{ taxa.associado_cpf }}</small>
                         {% else %}
-                            <span style="color: #999;">Associado não encontrado</span>
+                            <span style="color: #999;">CPF não informado</span>
                         {% endif %}
                     </td>
                     <td style="padding: 15px;">
@@ -114,17 +124,17 @@
                         </span>
                     </td>
                     <td style="padding: 15px; text-align: right; font-weight: bold; font-size: 1.1em;">
-                        {{ taxa.valor_formatado() }}
+                        {{ taxa.valor_formatado }}
                     </td>
                     <td style="padding: 15px; text-align: center;">
                         <span class="status-badge status-{{ taxa.status }}">
-                            {{ taxa._get_status_display() }}
+                            {{ taxa.status_display }}
                         </span>
                     </td>
                     <td style="padding: 15px; text-align: center;">
                         {% if taxa.data_vencimento %}
-                            <span style="color: {{ 'red' if taxa.is_vencida() else 'inherit' }};">
-                                {{ taxa.data_vencimento.strftime('%d/%m/%Y') }}
+                            <span style="color: {{ 'red' if taxa.is_vencida else 'inherit' }};">
+                                {{ taxa.data_vencimento }}
                             </span>
                         {% else %}
                             <span style="color: #999;">-</span>

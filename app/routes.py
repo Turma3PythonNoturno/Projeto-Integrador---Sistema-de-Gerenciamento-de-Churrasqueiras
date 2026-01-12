@@ -1,7 +1,7 @@
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session, get_flashed_messages
 from datetime import datetime, date, time, timedelta
 from app.container import container
-from app.models import db, Reserva, Churrasqueira
+from app.models import db, Reserva, Churrasqueira,LoginSistema, Associado, TokenRecuperacaoSenha
 
 routes = Blueprint('routes', __name__)
 
@@ -9,29 +9,182 @@ routes = Blueprint('routes', __name__)
 reserva_service = container.get_reserva_service()
 associado_service = container.get_associado_service()
 taxa_service = container.get_taxa_service()
-boletim_service = container.get_boletim_service()
+
+@routes.route('/', methods=['GET', 'POST'])
+def login():
+    if 'usuario_logado' in session:
+        return redirect(url_for('routes.inicio'))
+    
+    if request.method == 'POST':
+        # 1. Pega os dados do HTML
+        cpf_form = request.form.get('cpf_associado')
+        senha_form = request.form.get('password')
+
+        # 2. Limpeza do CPF (Remove pontos e traçõs para bater com o banco)
+        cpf_limpo = cpf_form.replace('.', '').replace('-', '')
+
+        # 3. Busca o usuário da tabela de login.
+        usuario_login = LoginSistema.query.filter_by(cpf=cpf_limpo).first()
+
+        # 4. Validação: Verifica se o usuário existe e se a senha está correta.
+        if usuario_login and usuario_login.verificar_senha(senha_form):
+            
+            # --- LOGIN SUCESSO---
+
+            #Criamos a "Sessão".
+            session['usuario_logado'] = True
+            session['cpf'] = usuario_login.cpf
+            session['is_admin'] = usuario_login.is_admin()
+
+            #Pega o nome através do relacionamento 'associado_obj' criado no Model
+            #o .split([0]) usado para pegar somente o primeiro nome para usar no menu.
+            nome_completo = usuario_login.associado_obj.nome
+            session['nome_usuario'] = nome_completo.split()[0]
+
+            flash(f'Bem-vindo(a), {session["nome_usuario"]}!', 'success')
+
+            return redirect(url_for('routes.inicio'))
+        
+        else:
+            flash('CPF ou senha incorretos.', 'danger')
+
+    return render_template('login.html')
+
+@routes.route('/logout')
+def logout():
+    session.clear()
+    flash('Você saiu do sistema', 'info')
+    return redirect(url_for('routes.login'))
 
 
-@routes.route('/')
+@routes.route('/esqueci-senha', methods=['GET', 'POST'])
+def esqueci_senha():
+    """Página para solicitar recuperação de senha"""
+    if request.method == 'POST':
+        cpf_form = request.form.get('cpf')
+        telefone_form = request.form.get('telefone')
+        
+        if not cpf_form or not telefone_form:
+            flash('CPF e telefone são obrigatórios', 'danger')
+            return render_template('esqueci_senha.html')
+        
+        # Limpa o CPF e telefone
+        cpf_limpo = cpf_form.replace('.', '').replace('-', '')
+        telefone_limpo = telefone_form.replace('(', '').replace(')', '').replace(' ', '').replace('-', '')
+        
+        # Verifica se o associado existe
+        associado = Associado.query.filter_by(cpf=cpf_limpo).first()
+        if not associado:
+            flash('CPF não encontrado no sistema', 'danger')
+            return render_template('esqueci_senha.html')
+        
+        # Verifica se o telefone está correto
+        telefone_cadastrado = associado.telefone.replace('(', '').replace(')', '').replace(' ', '').replace('-', '') if associado.telefone else ''
+        if telefone_cadastrado != telefone_limpo:
+            flash('Telefone não corresponde ao cadastro', 'danger')
+            return render_template('esqueci_senha.html')
+        
+        # Verifica se existe login cadastrado
+        login = LoginSistema.query.filter_by(cpf=cpf_limpo).first()
+        if not login:
+            flash('Usuário não possui login cadastrado', 'danger')
+            return render_template('esqueci_senha.html')
+        
+        try:
+            # Gera token de recuperação
+            token_obj = TokenRecuperacaoSenha.criar_token(cpf_limpo)
+            
+            # TODO: Enviar email com link de recuperação
+            # Por enquanto, vamos exibir o link na tela (desenvolvimento)
+            link_recuperacao = url_for('routes.resetar_senha', token=token_obj.token, _external=True)
+            
+            # Preparar telefone para WhatsApp (remove formatação)
+            telefone_whatsapp = associado.telefone.replace('(', '').replace(')', '').replace(' ', '').replace('-', '') if associado.telefone else None
+            
+            # Retorna para a página com o link gerado
+            return render_template('esqueci_senha.html', 
+                                 link_gerado=link_recuperacao,
+                                 telefone_whatsapp=telefone_whatsapp,
+                                 nome_associado=associado.nome,
+                                 sucesso=True)
+            
+        except Exception as e:
+            flash(f'Erro ao gerar token: {str(e)}', 'danger')
+        
+        return render_template('esqueci_senha.html')
+    
+    return render_template('esqueci_senha.html')
+
+
+@routes.route('/resetar-senha/<token>', methods=['GET', 'POST'])
+def resetar_senha(token):
+    """Página para resetar senha com token"""
+    # Busca o token no banco
+    token_obj = TokenRecuperacaoSenha.query.filter_by(token=token).first()
+    
+    if not token_obj:
+        flash('Token inválido ou não encontrado', 'danger')
+        return redirect(url_for('routes.login'))
+    
+    if not token_obj.is_valido():
+        flash('Token expirado ou já utilizado. Solicite uma nova recuperação.', 'warning')
+        return redirect(url_for('routes.esqueci_senha'))
+    
+    if request.method == 'POST':
+        nova_senha = request.form.get('nova_senha')
+        confirma_senha = request.form.get('confirma_senha')
+        
+        # Validações
+        if not nova_senha or not confirma_senha:
+            flash('Preencha todos os campos', 'danger')
+            return render_template('resetar_senha.html', token=token)
+        
+        if len(nova_senha) < 6:
+            flash('A senha deve ter no mínimo 6 caracteres', 'danger')
+            return render_template('resetar_senha.html', token=token)
+        
+        if nova_senha != confirma_senha:
+            flash('As senhas não coincidem', 'danger')
+            return render_template('resetar_senha.html', token=token)
+        
+        try:
+            # Busca o login do usuário
+            login = LoginSistema.query.filter_by(cpf=token_obj.cpf).first()
+            if not login:
+                flash('Usuário não encontrado', 'danger')
+                return redirect(url_for('routes.login'))
+            
+            # Atualiza a senha
+            login.definir_senha(nova_senha)
+            
+            # Marca o token como usado
+            token_obj.marcar_como_usado()
+            
+            db.session.commit()
+            
+            flash('Senha alterada com sucesso! Faça login com sua nova senha.', 'success')
+            return redirect(url_for('routes.login'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao resetar senha: {str(e)}', 'danger')
+            return render_template('resetar_senha.html', token=token)
+    
+    # GET - exibe o formulário
+    associado = Associado.query.filter_by(cpf=token_obj.cpf).first()
+    return render_template('resetar_senha.html', token=token, nome=associado.nome if associado else 'Usuário')
+
+
+@routes.route('/inicio')
 def inicio():
     """Página inicial do sistema SINT-IFESGO"""
     try:
-        # Buscar TODOS os boletins ativos para exibir na página inicial
-        boletins_ativos = boletim_service.listar_boletins_ativos()
-        
-        print(f"\n=== BOLETINS NA PÁGINA INICIAL ===")
-        print(f"Total de boletins ativos: {len(boletins_ativos)}")
-        for b in boletins_ativos:
-            print(f"- {b.get('titulo')} (prioridade: {b.get('prioridade')})")
-        print(f"=== FIM ===\n")
-        
-        return render_template('inicio.html', boletins_urgentes=boletins_ativos)
+        return render_template('inicio.html')
     except Exception as e:
-        print(f"\n!!! ERRO ao carregar boletins: {str(e)}\n")
+        print(f"\n!!! ERRO ao carregar página inicial: {str(e)}\n")
         import traceback
         traceback.print_exc()
-        return render_template('inicio.html', boletins_urgentes=[], 
-                             erro=f"Erro ao carregar boletins: {str(e)}")
+        return render_template('inicio.html', erro=f"Erro ao carregar página: {str(e)}")
 
 
 @routes.route('/nova-reserva')
@@ -433,102 +586,47 @@ def verificar_associado(cpf):
         }), 500
 
 
-@routes.route('/boletins')
-def listar_boletins():
-    """Página para listar boletins informativos"""
-    try:
-        # Listar TODOS os boletins (ativos e inativos)
-        boletins_data = boletim_service.listar_todos_boletins()
-        
-        print(f"\n=== BOLETINS ===")
-        print(f"Total de boletins: {len(boletins_data)}")
-        for b in boletins_data:
-            print(f"- {b.get('titulo')} (ativo: {b.get('ativo')})")
-        print(f"=== FIM ===")
-        
-        return render_template('boletins.html', 
-                             boletins=boletins_data,
-                             titulo="Boletins Informativos")
-    except Exception as e:
-        print(f"\n!!! ERRO ao listar boletins: {str(e)}\n")
-        import traceback
-        traceback.print_exc()
-        return render_template('boletins.html', 
-                             boletins=[], 
-                             erro=f"Erro ao carregar boletins: {str(e)}")
-
-
-@routes.route('/admin/boletim/novo')
-def novo_boletim():
-    """Página para criar novo boletim (admin)"""
-    return render_template('novo_boletim.html')
-
-
-@routes.route('/api/boletim/criar', methods=['POST'])
-def criar_boletim():
-    """API para criar novo boletim"""
-    try:
-        dados = request.get_json()
-        
-        if not dados:
-            return jsonify({
-                'sucesso': False,
-                'mensagem': 'Dados JSON são obrigatórios'
-            }), 400
-        
-        resultado = boletim_service.criar_boletim(dados)
-        
-        if resultado['sucesso']:
-            return jsonify(resultado), 201
-        else:
-            return jsonify(resultado), 400
-            
-    except Exception as e:
-        return jsonify({
-            'sucesso': False,
-            'mensagem': f'Erro interno do servidor: {str(e)}'
-        }), 500
-
-
 @routes.route('/taxas')
 def listar_taxas():
     """Lista taxas do sistema"""
-    try:
-        cpf_associado = request.args.get('cpf')  # Opcional
-        
-        if cpf_associado:
-            taxas = taxa_service.listar_por_associado(cpf_associado)
-        else:
-            taxas = taxa_service.listar_taxas_pendentes()
-        
-        # Calcular estatísticas básicas para o template
-        total_recebido = sum(float(t.get('valor', 0)) for t in taxas if t.get('status') == 'pago')
-        total_pendente = sum(float(t.get('valor', 0)) for t in taxas if t.get('status') == 'pendente')
-        total_vencido = sum(float(t.get('valor', 0)) for t in taxas if t.get('is_vencida', False))
-        
-        estatisticas = {
-            'total_recebido': total_recebido,
-            'total_pendente': total_pendente,
-            'total_vencido': total_vencido,
-            'total_taxas': len(taxas)
-        }
-        
-        return render_template('taxas.html', 
-                             taxas=taxas, 
-                             cpf_filtro=cpf_associado,
-                             estatisticas=estatisticas)
-    except Exception as e:
-        # Estatísticas vazias em caso de erro
-        estatisticas = {
-            'total_recebido': 0,
-            'total_pendente': 0,
-            'total_vencido': 0,
-            'total_taxas': 0
-        }
-        return render_template('taxas.html', 
-                             taxas=[], 
-                             erro=f"Erro ao carregar taxas: {str(e)}",
-                             estatisticas=estatisticas)
+    cpf_associado = request.args.get('cpf')  # Opcional
+    
+    # Lista TODAS as taxas, não apenas as pendentes
+    if cpf_associado:
+        taxas = taxa_service.listar_por_associado(cpf_associado)
+    else:
+        taxas = taxa_service.listar_todas_taxas()
+    
+    print(f"\n=== DEBUG TAXAS ===")
+    print(f"Total de taxas encontradas: {len(taxas)}")
+    print(f"Taxas: {taxas}")
+    
+    # Calcular estatísticas básicas para o template
+    total_recebido = sum(float(t.get('valor', 0)) for t in taxas if t.get('status') == 'pago')
+    total_pendente = sum(float(t.get('valor', 0)) for t in taxas if t.get('status') == 'pendente')
+    total_vencido = sum(float(t.get('valor', 0)) for t in taxas if t.get('status') == 'vencido')
+    
+    print(f"\n=== ESTATÍSTICAS CALCULADAS ===")
+    print(f"Total Recebido: R$ {total_recebido}")
+    print(f"Total Pendente: R$ {total_pendente}")
+    print(f"Total Vencido: R$ {total_vencido}")
+    print(f"Total de Taxas: {len(taxas)}")
+    
+    estatisticas = {
+        'total_recebido': total_recebido,
+        'total_pendente': total_pendente,
+        'total_vencido': total_vencido,
+        'total_taxas': len(taxas)
+    }
+    
+    print(f"\n=== ANTES DO RENDER ===")
+    print(f"Estatísticas sendo enviadas: {estatisticas}")
+    print(f"Taxas sendo enviadas: {len(taxas)} itens")
+    
+    return render_template('taxas.html', 
+                         taxas=taxas, 
+                         cpf_filtro=cpf_associado,
+                         estatisticas=estatisticas)
 
 
 @routes.route('/api/taxa/confirmar-pagamento-old', methods=['POST'])
@@ -577,13 +675,9 @@ def minha_conta(cpf):
         # Buscar taxas do associado
         taxas = taxa_service.listar_por_associado(cpf)
         
-        # Buscar boletins para o associado
-        boletins = boletim_service.listar_boletins_ativos(cpf)
-        
         return render_template('minha_conta.html', 
                              associado=associado,
-                             taxas=taxas,
-                             boletins=boletins)
+                             taxas=taxas)
         
     except Exception as e:
         return render_template('erro.html',
@@ -591,49 +685,6 @@ def minha_conta(cpf):
 
 
 # === ROTAS API PARA OS TEMPLATES ADMINISTRATIVOS ===
-
-@routes.route('/api/boletim/buscar', methods=['GET'])
-def api_buscar_boletim():
-    """API para buscar boletim por ID"""
-    boletim_id = request.args.get('id', type=int)
-    if not boletim_id:
-        return jsonify({'sucesso': False, 'mensagem': 'ID do boletim é obrigatório'}), 400
-    
-    boletim = boletim_service.buscar_por_id(boletim_id)
-    if not boletim:
-        return jsonify({'sucesso': False, 'mensagem': 'Boletim não encontrado'}), 404
-    
-    return jsonify({'sucesso': True, 'boletim': boletim})
-
-
-@routes.route('/api/boletim/editar', methods=['POST'])
-def api_editar_boletim():
-    """API para editar boletim"""
-    dados = request.get_json()
-    if not dados or not dados.get('id'):
-        return jsonify({'sucesso': False, 'mensagem': 'Dados incompletos'}), 400
-    
-    resultado = boletim_service.atualizar_boletim(dados['id'], dados)
-    return jsonify(resultado)
-
-
-@routes.route('/api/boletim/excluir', methods=['POST'])
-def api_excluir_boletim():
-    """API para excluir (desativar) boletim"""
-    dados = request.get_json()
-    if not dados or not dados.get('id'):
-        return jsonify({'sucesso': False, 'mensagem': 'ID do boletim é obrigatório'}), 400
-    
-    resultado = boletim_service.desativar_boletim(dados['id'])
-    return jsonify(resultado)
-
-
-@routes.route('/api/boletim/estatisticas', methods=['GET'])
-def api_estatisticas_boletim():
-    """API para obter estatísticas de boletins"""
-    stats = boletim_service.estatisticas()
-    return jsonify({'sucesso': True, 'estatisticas': stats})
-
 
 @routes.route('/api/associado/buscar', methods=['GET'])
 def api_buscar_associado():
@@ -801,6 +852,28 @@ def api_confirmar_pagamento_taxa():
         return jsonify(resultado)
     except Exception as e:
         return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+
+
+@routes.route('/api/taxa/detalhes/<int:taxa_id>', methods=['GET'])
+def api_detalhes_taxa(taxa_id):
+    """API para obter detalhes de uma taxa"""
+    try:
+        taxa_obj = taxa_service.obter_por_id(taxa_id)
+        if taxa_obj:
+            return jsonify({
+                'sucesso': True,
+                'taxa': taxa_obj
+            })
+        else:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Taxa não encontrada'
+            }), 404
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'Erro ao buscar taxa: {str(e)}'
+        }), 500
 
 
 @routes.route('/api/taxa/estatisticas', methods=['GET'])

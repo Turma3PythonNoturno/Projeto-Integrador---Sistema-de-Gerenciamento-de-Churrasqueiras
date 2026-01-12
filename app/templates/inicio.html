@@ -16,39 +16,6 @@
         Reserve a churrasqueira para seu evento familiar ou confraternização.
     </p>
     
-    <!-- Boletins Ativos 
-    {% if boletins_urgentes %}
-    <div class="boletins-urgentes" style="margin-bottom: 30px;">
-        <h3 style="color: #2c5234; margin-bottom: 20px;">📢 COMUNICADOS E AVISOS</h3>
-        {% for boletim in boletins_urgentes %}
-        <div class="alert" style="margin: 15px 0; padding: 20px; border-radius: 8px; text-align: left; 
-                    {% if boletim.prioridade == 'critica' %}background-color: #f8d7da; border-left: 5px solid #dc3545;
-                    {% elif boletim.prioridade == 'alta' %}background-color: #fff3cd; border-left: 5px solid #ffc107;
-                    {% elif boletim.prioridade == 'normal' %}background-color: #d1ecf1; border-left: 5px solid #17a2b8;
-                    {% else %}background-color: #d4edda; border-left: 5px solid #28a745;
-                    {% endif %}">
-            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
-                <strong style="font-size: 1.1em; color: #2c5234;">{{ boletim.titulo }}</strong>
-                <span style="font-size: 0.85em; padding: 3px 10px; border-radius: 12px;
-                      {% if boletim.prioridade == 'critica' %}background-color: #dc3545; color: white;
-                      {% elif boletim.prioridade == 'alta' %}background-color: #ffc107; color: #000;
-                      {% elif boletim.prioridade == 'normal' %}background-color: #17a2b8; color: white;
-                      {% else %}background-color: #28a745; color: white;
-                      {% endif %}">
-                    {{ boletim.prioridade | upper }}
-                </span>
-            </div>
-            <small style="color: #666; display: block; margin-bottom: 10px;">
-                📅 {{ boletim.data_publicacao }} | ✍️ {{ boletim.autor }}
-            </small>
-            <div style="margin-top: 10px; line-height: 1.6;">
-                {{ boletim.conteudo | safe }}
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}-->
-    
     <div style="display: flex; justify-content: center; gap: 20px; margin: 40px 0; flex-wrap: wrap;">
         <a href="{{ url_for('routes.nova_reserva') }}" class="btn" style="text-decoration: none; display: inline-block;">
             Fazer Nova Reserva

@@ -8,28 +8,30 @@ Modelos implementados:
 1. Associado - Dados dos membros do sindicato
 2. Reserva - Reservas de churrasqueira
 3. Taxa - Sistema de cobrança de taxas
-4. Boletim - Sistema de comunicados
+4. LoginSistema - Sistema de autenticação
 
 Relacionamentos:
 - Associado -> Reservas (1:N)
 - Associado -> Taxas (1:N) 
 - Reserva -> Taxas (1:N)
-- Boletim (independente)
+- LoginSistema -> Associado (1:1)
 
 Regras de negócio implementadas:
 - Validação de CPF brasileiro
 - Controle de adimplência sindical
 - Gestão de status de reservas
 - Sistema de cobrança de taxas
+- Autenticação de usuários
 
 Autor: Sistema SINT-IFESGO
 Versão: 1.0
 """
 
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timezone
 from decimal import Decimal
 import re
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # Instância global do SQLAlchemy para uso em toda a aplicação
 db = SQLAlchemy()
@@ -273,6 +275,7 @@ class Associado(db.Model):
     # Relacionamentos
     reservas = db.relationship('Reserva', backref='associado_obj', lazy=True, foreign_keys='Reserva.cpf_associado')
     taxas = db.relationship('Taxa', backref='associado_obj', lazy=True, foreign_keys='Taxa.associado_cpf')
+    credencial = db.relationship('LoginSistema', backref='associado_obj', uselist=False, lazy=True, cascade="all, delete-orphan")
     
     def __repr__(self):
         return f'<Associado {self.nome} - CPF: {self.cpf_formatado}>'
@@ -456,6 +459,27 @@ class Taxa(db.Model):
     
     def to_dict(self):
         """Converte para dicionário"""
+        # Buscar nome do associado (primeiro na API, depois no banco local)
+        associado_nome = None
+        if self.associado_cpf:
+            # Limpar CPF para busca (remover formatação)
+            cpf_limpo = self.associado_cpf.replace('.', '').replace('-', '') if '.' in self.associado_cpf or '-' in self.associado_cpf else self.associado_cpf
+            
+            # Tentar buscar na API primeiro
+            try:
+                from app.services.webservice_sinsind import web_service_sinsind
+                sucesso, dados_ws, _ = web_service_sinsind.consultar_associado(cpf_limpo)
+                if sucesso and dados_ws:
+                    associado_nome = dados_ws.get('nome')
+            except Exception:
+                pass
+            
+            # Se não encontrou na API, buscar no banco local
+            if not associado_nome:
+                associado = Associado.query.filter_by(cpf=cpf_limpo).first()
+                if associado:
+                    associado_nome = associado.nome
+        
         return {
             'id': self.id,
             'valor': float(self.valor),
@@ -467,6 +491,7 @@ class Taxa(db.Model):
             'data_pagamento': self.data_pagamento.strftime('%d/%m/%Y %H:%M') if self.data_pagamento else None,
             'reserva_id': self.reserva_id,
             'associado_cpf': self.associado_cpf,
+            'associado_nome': associado_nome,
             'codigo_pagamento': self.codigo_pagamento,
             'observacoes': self.observacoes or '',
             'data_criacao': self.data_criacao.strftime('%d/%m/%Y %H:%M') if self.data_criacao else '',
@@ -483,86 +508,133 @@ class Taxa(db.Model):
         }
         return status_map.get(self.status, self.status.title())
 
+        
+class LoginSistema(db.Model):
+    """
+    Modelo de Credenciais de Acesso.
+    
+    Gerencia o login e nível de permissão dos associados.
+    Relacionamento 1:1 com a tabela Associado através do CPF.
+    
+    Attributes:
+        id (int): Identificador interno
+        cpf (str): Chave estrangeira para Associado (Unique)
+        senha_hash (str): Hash seguro da senha
+        adm (int): Nível de permissão (0=Comum, 1=Admin)
+    """
+    __tablename__ = 'login_sistema'
 
-class Boletim(db.Model):
-    """Modelo para Boletins Informativos do SINT-IFESGO"""
-    __tablename__ = 'boletins'
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # Chave estrangeira ligando ao CPF da tabela associados
+    cpf = db.Column(db.String(11), db.ForeignKey('associados.cpf'), unique=True, nullable=False, comment='CPF do associado (Login)')
+    
+    senha_hash = db.Column(db.String(128), nullable=False, comment='Hash da senha')
+    adm = db.Column(db.Integer, default=0, comment='Nível de acesso: 0=Usuário, 1=Admin')
+    
+    data_criacao = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    ultimo_login = db.Column(db.DateTime, nullable=True)
+
+    def __repr__(self):
+        tipo = "Admin" if self.adm == 1 else "Usuário"
+        return f'<Login {self.cpf} - {tipo}>'
+
+    def definir_senha(self, senha):
+        """Gera o hash da senha antes de salvar"""
+        self.senha_hash = generate_password_hash(senha)
+
+    def verificar_senha(self, senha):
+        """Verifica se a senha em texto bate com o hash salvo"""
+        return check_password_hash(self.senha_hash, senha)
+    
+    def is_admin(self):
+        """Retorna True se for administrador"""
+        return self.adm == 1
+
+    def to_dict(self):
+        """Converte para dicionário (seguro, sem a senha)"""
+        return {
+            'cpf': self.cpf,
+            'is_admin': self.is_admin(),
+            'tipo_usuario': 'Administrador' if self.adm == 1 else 'Associado',
+            'data_criacao': self.data_criacao.strftime('%d/%m/%Y %H:%M') if self.data_criacao else '',
+            'ultimo_login': self.ultimo_login.strftime('%d/%m/%Y %H:%M') if self.ultimo_login else 'Nunca'
+        }
+
+
+class TokenRecuperacaoSenha(db.Model):
+    """
+    Modelo para tokens de recuperação de senha.
+    
+    Gera tokens únicos e temporários para recuperação de senha.
+    Tokens expiram em 1 hora por segurança.
+    
+    Attributes:
+        id (int): Identificador único
+        cpf (str): CPF do associado
+        token (str): Token único de 32 caracteres
+        data_criacao (datetime): Quando o token foi gerado
+        data_expiracao (datetime): Quando o token expira
+        usado (bool): Se o token já foi utilizado
+    """
+    __tablename__ = 'token_recuperacao_senha'
     
     id = db.Column(db.Integer, primary_key=True)
-    titulo = db.Column(db.String(200), nullable=False)
-    conteudo = db.Column(db.Text, nullable=False)
-    tipo = db.Column(db.String(20), default='geral')  # geral, urgente, comunicado, evento
-    prioridade = db.Column(db.String(20), default='normal')  # baixa, normal, alta, critica
-    data_publicacao = db.Column(db.DateTime, default=datetime.utcnow)
-    data_expiracao = db.Column(db.DateTime, nullable=True)
-    ativo = db.Column(db.Boolean, default=True)
-    autor = db.Column(db.String(100), nullable=True)
-    destinatarios = db.Column(db.String(20), default='todos')  # todos, adimplentes, inadimplentes
+    cpf = db.Column(db.String(11), db.ForeignKey('associados.cpf'), nullable=False, comment='CPF do associado')
+    token = db.Column(db.String(64), unique=True, nullable=False, comment='Token único de recuperação')
+    data_criacao = db.Column(db.DateTime, default=datetime.now(timezone.utc), comment='Data de criação')
+    data_expiracao = db.Column(db.DateTime, nullable=False, comment='Data de expiração (1 hora)')
+    usado = db.Column(db.Boolean, default=False, comment='Se o token já foi usado')
     
     def __repr__(self):
-        return f'<Boletim {self.titulo} - {self.tipo}>'
+        return f'<TokenRecuperacaoSenha {self.cpf} - {self.token[:8]}...>'
     
-    def is_ativo(self):
-        """Verifica se o boletim está ativo"""
-        if not self.ativo:
-            return False
+    @staticmethod
+    def gerar_token():
+        """Gera um token aleatório de 32 caracteres"""
+        import secrets
+        return secrets.token_urlsafe(32)
+    
+    @classmethod
+    def criar_token(cls, cpf: str):
+        """Cria um novo token de recuperação para o CPF"""
+        # Invalidar tokens anteriores não usados
+        tokens_antigos = cls.query.filter_by(cpf=cpf, usado=False).all()
+        for token_antigo in tokens_antigos:
+            token_antigo.usado = True
         
-        # Verifica se não expirou
-        if self.data_expiracao and datetime.utcnow() > self.data_expiracao:
-            return False
+        # Criar novo token válido por 1 hora
+        from datetime import timedelta
+        novo_token = cls(
+            cpf=cpf,
+            token=cls.gerar_token(),
+            data_expiracao=datetime.now(timezone.utc) + timedelta(hours=1)
+        )
         
+        db.session.add(novo_token)
+        db.session.commit()
+        
+        return novo_token
+    
+    def is_valido(self) -> bool:
+        """Verifica se o token ainda é válido"""
+        if self.usado:
+            return False
+        if datetime.now(timezone.utc) > self.data_expiracao:
+            return False
         return True
     
-    def is_urgente(self):
-        """Verifica se é boletim urgente"""
-        return self.prioridade in ['alta', 'critica'] or self.tipo == 'urgente'
-    
-    def deve_notificar_associado(self, status_adimplencia: str):
-        """Verifica se deve notificar associado baseado no status"""
-        if self.destinatarios == 'todos':
-            return True
-        
-        if self.destinatarios == 'adimplentes' and status_adimplencia == 'adimplente':
-            return True
-        
-        if self.destinatarios == 'inadimplentes' and status_adimplencia == 'inadimplente':
-            return True
-        
-        return False
-    
-    def resumo(self, max_chars: int = 100):
-        """Retorna resumo do conteúdo"""
-        if len(self.conteudo) <= max_chars:
-            return self.conteudo
-        
-        return self.conteudo[:max_chars] + "..."
+    def marcar_como_usado(self):
+        """Marca o token como usado"""
+        self.usado = True
+        db.session.commit()
     
     def to_dict(self):
         """Converte para dicionário"""
         return {
-            'id': self.id,
-            'titulo': self.titulo,
-            'conteudo': self.conteudo,
-            'resumo': self.resumo(),
-            'tipo': self.tipo,
-            'prioridade': self.prioridade,
-            'data_publicacao': self.data_publicacao.strftime('%d/%m/%Y %H:%M') if self.data_publicacao else '',
-            'data_expiracao': self.data_expiracao.strftime('%d/%m/%Y %H:%M') if self.data_expiracao else None,
-            'ativo': self.ativo,
-            'is_ativo': self.is_ativo(),
-            'is_urgente': self.is_urgente(),
-            'autor': self.autor or 'SINT-IFESGO',
-            'destinatarios': self.destinatarios,
-            'classe_css': self._get_classe_css()
+            'cpf': self.cpf,
+            'token': self.token,
+            'valido': self.is_valido(),
+            'data_criacao': self.data_criacao.strftime('%d/%m/%Y %H:%M') if self.data_criacao else '',
+            'data_expiracao': self.data_expiracao.strftime('%d/%m/%Y %H:%M') if self.data_expiracao else ''
         }
-    
-    def _get_classe_css(self):
-        """Retorna classe CSS baseada no tipo e prioridade"""
-        if self.prioridade == 'critica':
-            return 'alert-danger'
-        elif self.prioridade == 'alta' or self.tipo == 'urgente':
-            return 'alert-warning'
-        elif self.tipo == 'evento':
-            return 'alert-info'
-        else:
-            return 'alert-primary'

@@ -6,6 +6,9 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from config import Config
 
+app = Flask(__name__)
+app.secret_key = 'bfdpython'
+
 def create_app():
     """Factory function para criar e configurar a aplicação Flask."""
     app = Flask(
@@ -72,6 +75,28 @@ def create_app():
             print("Associado de teste criado!")
         else:
             print(f"Banco já contém {total_associados} associado(s)")
+        # Criar usuário administrador de teste se não existir
+        admin_login = LoginSistema.query.filter_by(cpf='12345678901').first()
+        if not admin_login:
+            print("Criando usuário administrador de teste...")
+            admin = LoginSistema(
+                cpf='12345678901',
+                adm=1  # Nível administrador
+            )
+            admin.definir_senha('admin123')  # Senha: admin123
+            db.session.add(admin)
+            db.session.commit()
+            print("=" * 50)
+            print("USUÁRIO ADMINISTRADOR CRIADO!")
+            print("=" * 50)
+            print("CPF: 123.456.789-01")
+            print("Senha: admin123")
+            print("Nível: Administrador")
+            print("=" * 50)
+        else:
+            print("Usuário administrador já existe")
+            print("CPF: 123.456.789-01 | Senha: admin123")
+    
 
     return app
 

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block titulo %}
+    Login
+{% endblock %}
+
+{% block navbar %}
+{% endblock %}
+
+{% block conteudo %}
+
+    <h2 style="text-align: center; margin-bottom: 30px; margin-top: auto; font-size: 40px;">Login</h2>
+
+    <div style="background-color: #d1ecf1; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #17a2b8; max-width: 600px; margin-left: auto; margin-right: auto;">
+        <p style="margin: 0; color: #0c5460; font-size: 14px; text-align: center;">
+            ℹ️ <strong>Usuário de Teste:</strong> CPF: 123.456.789-01 | Senha: admin123
+        </p>
+    </div>
+
+    <div id="mensagem" style="display: none;" class="alert"></div>
+
+    <form id="form-reserva" method="POST" style="max-width: 600px; margin: 0 auto;">
+        
+        <div class="form-group">
+            <label for="cpf_associado">CPF do Associado *</label>
+            <input 
+                type="tel" 
+                id="cpf_associado" 
+                name="cpf_associado" 
+                pattern="\d{3}\.\d{3}\.\d{3}-\d{2}"
+                required 
+                minlength="14" 
+                maxlength="14" 
+                autocomplete="username" 
+                placeholder="000.000.000-00"
+                value="123.456.789-01"
+                oninput="mascaraCPF(this)"
+                class="form-control"
+            >
+            <small style="color: #666;">Digite o CPF do associado.</small>
+            <div id="status-associado-cpf" style="margin-top: 10px;"></div>
+        </div>
+
+        <div class="form-group">
+            <label for="password">Senha</label>
+            <input 
+                type="password" 
+                id="password" 
+                name="password" 
+                autocomplete="current-password"  
+                required 
+                maxlength="16"
+                placeholder="(Máximo de 16 caracteres)"
+                value="admin123"
+                class="form-control"
+            >
+            <small style="color: #666;">Digite sua senha. </small>
+            <div id="status-senha" style="margin-top: 10px;"></div>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <button type="submit" class="btn btn-primary">
+                Entrar
+            </button>
+            <a href="{{ url_for('routes.esqueci_senha') }}" class="btn btn-secondary" style="text-decoration: none; margin-left: 10px;">
+                Esqueceu sua Senha?
+            </a>
+        </div>
+
+        <div id="links-inferiores">
+            <a href=""></a>
+        </div>
+
+    </form> <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+{% endblock %}

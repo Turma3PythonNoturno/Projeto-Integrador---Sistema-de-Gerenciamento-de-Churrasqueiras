@@ -147,21 +147,33 @@
     </style>
 </head>
 <body>
+    {% block cabecalho %}
     <div class="header">
-        <h1>{% block cabecalho %}SINT-IFESGO{% endblock %}</h1>
+        <h1>SINT-IFESGO</h1>
         <p>Sistema de Reserva de Churrasqueira</p>
         <small>Sindicato dos Trabalhadores Técnico-Administrativos em Educação das IFES-GO</small>
     </div>
-    
+    {% endblock %}
+
+    {% block navbar %}
+
+    {% if session['usuario_logado'] %}
+        <span>Olá, {{ session['nome_usuario'] }}</span>
+        <a href="{{ url_for('routes.logout') }}">Sair</a>
+    {% else %}
+        <a href="{{ url_for('routes.login') }}">Entrar</a>
+    {% endif %}
+
     <nav class="nav">
         <a href="{{ url_for('routes.inicio') }}">Início</a>
         <a href="{{ url_for('routes.nova_reserva') }}">Nova Reserva</a>
         <a href="{{ url_for('routes.listar_reservas') }}">Ver Reservas</a>
-        <a href="{{ url_for('routes.listar_boletins') }}">Boletins</a>
+        {% if session.get('is_admin') %}
         <a href="{{ url_for('routes.listar_associados') }}">Associados</a>
         <a href="{{ url_for('routes.listar_taxas') }}">Taxas</a>
+        {% endif %}
     </nav>
-    
+    {% endblock %}
     <div class="container">
         {% block conteudo %}{% endblock %}
     </div>

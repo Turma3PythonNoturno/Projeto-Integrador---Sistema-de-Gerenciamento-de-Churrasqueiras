@@ -206,13 +206,17 @@ class ReservaService:
         # 9. Gerar taxa de reserva
         reserva_id = resultado_reserva['reserva']['id']
         if cpf_associado:
+            print(f"\n>>> Gerando taxa para reserva ID: {reserva_id}, CPF: {cpf_associado}")
             resultado_taxa = self._taxa_service.gerar_taxa_reserva(reserva_id, cpf_associado)
+            print(f">>> Resultado da taxa: {resultado_taxa}\n")
         else:
             resultado_taxa = {'sucesso': False, 'mensagem': 'CPF do associado não informado'}
+            print(f">>> ERRO: CPF não informado para gerar taxa")
         
         if not resultado_taxa['sucesso']:
             # Se falhar na geração da taxa, podemos decidir se cancela a reserva ou não
             # Por ora, vamos manter a reserva mas informar sobre a taxa
+            print(f">>> AVISO: Falha ao gerar taxa - {resultado_taxa.get('mensagem')}")
             pass
         
         # 10. Retornar resultado completo

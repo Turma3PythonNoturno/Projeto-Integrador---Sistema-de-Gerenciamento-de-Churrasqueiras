@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block titulo %}Redefinir Senha{% endblock %}
+
+{% block navbar %}
+{% endblock %}
+
+{% block conteudo %}
+<div style="max-width: 600px; margin: 50px auto;">
+    <h2 style="text-align: center; margin-bottom: 30px; color: #2c5234;">
+        🔑 Redefinir Senha
+    </h2>
+    
+    <div style="background-color: #e8f5e8; padding: 20px; border-radius: 8px; margin-bottom: 30px; border-left: 4px solid #28a745;">
+        <p style="margin: 0; color: #2c5234;">
+            <strong>Olá, {{ nome }}!</strong><br>
+            Crie uma nova senha para sua conta.
+        </p>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}" style="padding: 15px; margin-bottom: 20px; border-radius: 5px;">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST" style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label for="nova_senha" style="display: block; margin-bottom: 8px; font-weight: bold; color: #333;">
+                Nova Senha *
+            </label>
+            <input 
+                type="password" 
+                id="nova_senha" 
+                name="nova_senha" 
+                required 
+                minlength="6"
+                maxlength="16"
+                placeholder="Mínimo 6 caracteres"
+                class="form-control"
+                style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px;"
+            >
+            <small style="color: #666; font-size: 14px;">Digite sua nova senha (6-16 caracteres)</small>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 25px;">
+            <label for="confirma_senha" style="display: block; margin-bottom: 8px; font-weight: bold; color: #333;">
+                Confirmar Senha *
+            </label>
+            <input 
+                type="password" 
+                id="confirma_senha" 
+                name="confirma_senha" 
+                required 
+                minlength="6"
+                maxlength="16"
+                placeholder="Digite a senha novamente"
+                class="form-control"
+                style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 16px;"
+            >
+            <small style="color: #666; font-size: 14px;">Repita a senha para confirmar</small>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <button type="submit" class="btn btn-primary" style="padding: 12px 40px; font-size: 16px;">
+                Redefinir Senha
+            </button>
+        </div>
+    </form>
+
+    <div style="text-align: center; margin-top: 30px; padding: 15px; background-color: #d1ecf1; border-radius: 8px; border-left: 4px solid #17a2b8;">
+        <p style="margin: 0; color: #0c5460; font-size: 14px;">
+            ℹ️ Após redefinir sua senha, você será redirecionado para a página de login.
+        </p>
+    </div>
+</div>
+
+{% endblock %}
