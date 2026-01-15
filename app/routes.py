@@ -178,6 +178,11 @@ def resetar_senha(token):
 @routes.route('/inicio')
 def inicio():
     """Página inicial do sistema SINT-IFESGO"""
+    # Verificar se usuário está logado
+    if 'usuario_logado' not in session:
+        flash('Você precisa estar logado para acessar o sistema', 'warning')
+        return redirect(url_for('routes.login'))
+    
     try:
         return render_template('inicio.html')
     except Exception as e:
@@ -190,20 +195,51 @@ def inicio():
 @routes.route('/nova-reserva')
 def nova_reserva():
     """Página para fazer nova reserva"""
-    return render_template('nova_reserva.html')
+    # Verificar se usuário está logado
+    if 'usuario_logado' not in session:
+        flash('Você precisa estar logado para fazer uma reserva', 'warning')
+        return redirect(url_for('routes.login'))
+    
+    # Passar CPF do usuário logado para o template
+    cpf_usuario = session.get('cpf', '')
+    cpf_formatado = ''
+    if cpf_usuario and len(cpf_usuario) == 11:
+        cpf_formatado = f"{cpf_usuario[:3]}.{cpf_usuario[3:6]}.{cpf_usuario[6:9]}-{cpf_usuario[9:]}"
+    
+    return render_template('nova_reserva.html', cpf_usuario=cpf_usuario, cpf_formatado=cpf_formatado)
 
 
 @routes.route('/reservas')
 def listar_reservas():
-    """Página para listar todas as reservas"""
+    """Página para listar reservas - todas para admin, apenas do usuário para associados"""
     try:
-        # Listar TODAS as reservas, não apenas futuras
-        reservas_data = reserva_service.listar_todas_reservas()
+        # Verificar se usuário está logado
+        if 'usuario_logado' not in session:
+            flash('Você precisa estar logado para ver reservas', 'warning')
+            return redirect(url_for('routes.login'))
+        
+        is_admin = session.get('is_admin', False)
+        cpf_usuario = session.get('cpf')
+        
+        # Se for admin, listar todas as reservas
+        if is_admin:
+            reservas_data = reserva_service.listar_todas_reservas()
+            titulo = "Reservas da Churrasqueira"
+        else:
+            # Se for associado comum, listar apenas suas reservas
+            from app.models import Reserva
+            reservas_objs = Reserva.query.filter_by(cpf_associado=cpf_usuario).order_by(
+                Reserva.data_reserva.desc(), 
+                Reserva.horario_inicio.desc()
+            ).all()
+            reservas_data = [r.to_dict() for r in reservas_objs]
+            titulo = "Minhas Reservas"
         
         print(f"\n=== DEBUG RESERVAS ===")
+        print(f"Usuário: {cpf_usuario} | Admin: {is_admin}")
         print(f"Total de reservas encontradas: {len(reservas_data)}")
         for r in reservas_data:
-            print(f"Reserva: {r.get('nome')} - {r.get('data_reserva')}")
+            print(f"Reserva: {r.get('nome')} - {r.get('data_reserva')} - CPF: {r.get('cpf_associado')}")
         print(f"=== FIM DEBUG ===\n")
         
         # Converter para objetos compatíveis com template
@@ -221,13 +257,15 @@ def listar_reservas():
             
             reservas.append(ReservaView(reserva_dict))
         
-        return render_template('lista_reservas.html', reservas=reservas)
+        return render_template('lista_reservas.html', reservas=reservas, titulo=titulo, is_admin=is_admin)
     except Exception as e:
         print(f"\n!!! ERRO AO LISTAR RESERVAS: {str(e)}\n")
         import traceback
         traceback.print_exc()
         return render_template('lista_reservas.html', 
                              reservas=[], 
+                             titulo="Reservas",
+                             is_admin=False,
                              erro=f"Erro ao carregar reservas: {str(e)}")
 
 
@@ -260,6 +298,13 @@ def verificar_disponibilidade():
 @routes.route('/api/criar-reserva', methods=['POST'])
 def criar_reserva():
     """API para criar nova reserva"""
+    # Verificar se usuário está logado
+    if 'usuario_logado' not in session:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'Você precisa estar logado para fazer uma reserva'
+        }), 401
+    
     try:
         dados = request.get_json()
         
@@ -275,6 +320,22 @@ def criar_reserva():
                 "sucesso": False,
                 "mensagem": "Você deve selecionar uma churrasqueira."
             }), 400
+        
+        # Preencher CPF do associado automaticamente com o CPF do usuário logado
+        # Se não vier do formulário, usar o CPF da sessão
+        cpf_form = dados.get('cpf_associado', '')
+        cpf_usuario = session.get('cpf')
+        
+        # Limpar CPF (remover pontos e traços)
+        if cpf_form:
+            cpf_limpo = ''.join(filter(str.isdigit, str(cpf_form)))
+        elif cpf_usuario:
+            cpf_limpo = ''.join(filter(str.isdigit, str(cpf_usuario)))
+        else:
+            cpf_limpo = None
+        
+        if cpf_limpo:
+            dados['cpf_associado'] = cpf_limpo
         
         resultado = reserva_service.criar_reserva(dados)
         
@@ -293,7 +354,34 @@ def criar_reserva():
 @routes.route('/api/cancelar-reserva/<int:reserva_id>', methods=['POST'])
 def cancelar_reserva(reserva_id):
     """API para cancelar uma reserva"""
+    # Verificar se usuário está logado
+    if 'usuario_logado' not in session:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'Você precisa estar logado para cancelar uma reserva'
+        }), 401
+    
     try:
+        is_admin = session.get('is_admin', False)
+        cpf_usuario = session.get('cpf')
+        
+        # Verificar se a reserva pertence ao usuário (exceto se for admin)
+        if not is_admin:
+            from app.models import Reserva
+            reserva = Reserva.query.get(reserva_id)
+            if not reserva:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': 'Reserva não encontrada'
+                }), 404
+            
+            # Verificar se a reserva pertence ao usuário logado
+            if reserva.cpf_associado != cpf_usuario:
+                return jsonify({
+                    'sucesso': False,
+                    'mensagem': 'Você só pode cancelar suas próprias reservas'
+                }), 403
+        
         dados = request.get_json() or {}
         email_confirmacao = dados.get('email')
         
@@ -393,9 +481,19 @@ def pagina_estatisticas():
 
 # === NOVAS ROTAS SINT-IFESGO ===
 
+def verificar_admin():
+    """Verifica se o usuário é administrador"""
+    if 'usuario_logado' not in session:
+        return False
+    return session.get('is_admin', False)
+
 @routes.route('/associados')
 def listar_associados():
-    """Lista todos os associados - busca da API"""
+    """Lista todos os associados - busca da API (apenas admin)"""
+    if not verificar_admin():
+        flash('Acesso negado. Apenas administradores podem acessar esta página.', 'danger')
+        return redirect(url_for('routes.inicio'))
+    
     try:
         # Buscar dados da API
         import requests
@@ -588,7 +686,11 @@ def verificar_associado(cpf):
 
 @routes.route('/taxas')
 def listar_taxas():
-    """Lista taxas do sistema"""
+    """Lista taxas do sistema (apenas admin)"""
+    if not verificar_admin():
+        flash('Acesso negado. Apenas administradores podem acessar esta página.', 'danger')
+        return redirect(url_for('routes.inicio'))
+    
     cpf_associado = request.args.get('cpf')  # Opcional
     
     # Lista TODAS as taxas, não apenas as pendentes

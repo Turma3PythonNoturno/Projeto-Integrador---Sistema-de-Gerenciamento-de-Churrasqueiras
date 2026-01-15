@@ -11,11 +11,16 @@
 
     <h2 style="text-align: center; margin-bottom: 30px; margin-top: auto; font-size: 40px;">Login</h2>
 
-    <div style="background-color: #d1ecf1; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #17a2b8; max-width: 600px; margin-left: auto; margin-right: auto;">
-        <p style="margin: 0; color: #0c5460; font-size: 14px; text-align: center;">
-            ℹ️ <strong>Usuário de Teste:</strong> CPF: 123.456.789-01 | Senha: admin123
-        </p>
-    </div>
+    <!-- Exibir mensagens flash (erros e sucessos) -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}" style="max-width: 600px; margin: 0 auto 20px auto; padding: 15px; border-radius: 8px; {% if category == 'danger' %}background-color: #f8d7da; border: 2px solid #f5c6cb; color: #721c24;{% elif category == 'success' %}background-color: #d4edda; border: 2px solid #c3e6cb; color: #155724;{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 
     <div id="mensagem" style="display: none;" class="alert"></div>
 
@@ -33,7 +38,6 @@
                 maxlength="14" 
                 autocomplete="username" 
                 placeholder="000.000.000-00"
-                value="123.456.789-01"
                 oninput="mascaraCPF(this)"
                 class="form-control"
             >
@@ -50,8 +54,7 @@
                 autocomplete="current-password"  
                 required 
                 maxlength="16"
-                placeholder="(Máximo de 16 caracteres)"
-                value="admin123"
+                placeholder="Digite sua senha"
                 class="form-control"
             >
             <small style="color: #666;">Digite sua senha. </small>

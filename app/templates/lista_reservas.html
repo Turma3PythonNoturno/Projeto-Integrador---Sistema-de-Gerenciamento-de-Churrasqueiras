@@ -3,7 +3,7 @@
 {% block titulo %}Reservas - Sistema de Churrasqueira{% endblock %}
 
 {% block conteudo %}
-<h2 style="text-align: center; margin-bottom: 30px;">Reservas da Churrasqueira</h2>
+<h2 style="text-align: center; margin-bottom: 30px;">{{ titulo|default('Reservas da Churrasqueira') }}</h2>
 
 <div style="text-align: center; margin-bottom: 20px;">
     <a href="{{ url_for('routes.nova_reserva') }}" class="btn">

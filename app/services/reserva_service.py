@@ -132,7 +132,9 @@ class ReservaService:
         # 2. VERIFICAÇÃO DE ADIMPLÊNCIA SINDICAL
         # Regra fundamental: apenas associados adimplentes podem reservar
         cpf_associado = dados_reserva.get('cpf_associado')
+        # Limpar CPF (remover pontos e traços) se fornecido
         if cpf_associado:
+            cpf_associado = ''.join(filter(str.isdigit, str(cpf_associado)))
             adimplente, mensagem_adimplencia = self._associado_service.verificar_adimplencia(cpf_associado)
             if not adimplente:
                 return {

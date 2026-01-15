@@ -11,9 +11,15 @@ class ReservaRepository(IReservaRepository):
     def criar_reserva(self, reserva_data: Dict) -> Dict:
         """Cria uma nova reserva no banco de dados"""
         try:
+            # Limpar CPF (remover pontos e traços) se fornecido
+            cpf_associado = reserva_data.get('cpf_associado')
+            if cpf_associado:
+                cpf_associado = ''.join(filter(str.isdigit, str(cpf_associado)))
+            
             nova_reserva = ReservaModel(
                 nome=reserva_data['nome'],
                 churrasqueira_id=reserva_data['churrasqueira_id'],  
+                cpf_associado=cpf_associado,
                 data_reserva=reserva_data['data_reserva'],
                 horario_inicio=reserva_data['horario_inicio'],
                 horario_fim=reserva_data['horario_fim'],
@@ -21,7 +27,7 @@ class ReservaRepository(IReservaRepository):
                 telefone=reserva_data.get('telefone'),
                 numero_convidados=reserva_data.get('numero_convidados', 1),
                 observacoes=reserva_data.get('observacoes'),
-                status='ativa'
+                status=reserva_data.get('status', 'ativa')
             )
             
             db.session.add(nova_reserva)
@@ -208,6 +214,8 @@ class ReservaRepository(IReservaRepository):
             'nome': reserva.nome,
             'email': reserva.email,
             'telefone': reserva.telefone,
+            'cpf_associado': reserva.cpf_associado or '',
+            'churrasqueira_id': reserva.churrasqueira_id,
             'data_reserva': reserva.data_reserva.strftime('%d/%m/%Y'),
             'data_reserva_iso': reserva.data_reserva.strftime('%Y-%m-%d'),
             'horario_inicio': reserva.horario_inicio.strftime('%H:%M'),
