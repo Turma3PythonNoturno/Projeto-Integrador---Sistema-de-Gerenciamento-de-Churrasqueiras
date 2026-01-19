@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 from datetime import datetime, date, time, timedelta
 from app.container import container
 from app.models import db, Reserva, Churrasqueira,LoginSistema, Associado, TokenRecuperacaoSenha
+from app.utils import CPFUtils
 
 routes = Blueprint('routes', __name__)
 
@@ -328,9 +329,9 @@ def criar_reserva():
         
         # Limpar CPF (remover pontos e traços)
         if cpf_form:
-            cpf_limpo = ''.join(filter(str.isdigit, str(cpf_form)))
+            cpf_limpo = CPFUtils.limpar(str(cpf_form))
         elif cpf_usuario:
-            cpf_limpo = ''.join(filter(str.isdigit, str(cpf_usuario)))
+            cpf_limpo = CPFUtils.limpar(str(cpf_usuario))
         else:
             cpf_limpo = None
         
@@ -519,14 +520,14 @@ def listar_associados():
             
             # Padronizar dados
             for assoc in associados_raw:
-                cpf_limpo = ''.join(filter(str.isdigit, assoc.get('cpf', '')))
+                cpf_limpo = CPFUtils.limpar(assoc.get('cpf', ''))
                 inadimplencia = str(assoc.get('inadimplencia', 'SIM') or 'SIM').upper()
                 
                 associados.append({
                     'id': assoc.get('id'),
                     'codigo': assoc.get('codigo', ''),
                     'cpf': cpf_limpo,
-                    'cpf_formatado': f"{cpf_limpo[:3]}.{cpf_limpo[3:6]}.{cpf_limpo[6:9]}-{cpf_limpo[9:]}" if len(cpf_limpo) == 11 else cpf_limpo,
+                    'cpf_formatado': CPFUtils.formatar(cpf_limpo),
                     'nome': assoc.get('nome', ''),
                     'lotacao': assoc.get('lotacao', ''),
                     'categoria': assoc.get('categoria', ''),

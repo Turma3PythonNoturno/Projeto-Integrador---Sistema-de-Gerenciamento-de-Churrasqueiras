@@ -2,6 +2,7 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime, date
 from app.models import db, Associado
 from app.services.webservice_sinsind import web_service_sinsind
+from app.utils import CPFUtils
 import logging
 
 
@@ -14,7 +15,7 @@ class AssociadoService:
     def buscar_por_cpf(self, cpf: str) -> Optional[Dict]:
         """Busca associado por CPF - primeiro no web service, depois no banco local"""
         # Limpar CPF
-        cpf_limpo = self._limpar_cpf(cpf)
+        cpf_limpo = CPFUtils.limpar(cpf)
         
         # Tentar buscar no web service primeiro
         try:
@@ -79,7 +80,7 @@ class AssociadoService:
         """Cria novo associado"""
         try:
             # Validar CPF
-            cpf_limpo = self._limpar_cpf(dados['cpf'])
+            cpf_limpo = CPFUtils.limpar(dados['cpf'])
             cpf_valido, cpf_msg = Associado.validar_cpf(cpf_limpo)
             
             if not cpf_valido:
@@ -145,7 +146,7 @@ class AssociadoService:
     def atualizar_status_adimplencia(self, cpf: str, status: str, data_pagamento: date = None) -> Dict:
         """Atualiza status de adimplência do associado"""
         try:
-            cpf_limpo = self._limpar_cpf(cpf)
+            cpf_limpo = CPFUtils.limpar(cpf)
             associado = Associado.query.filter_by(cpf=cpf_limpo).first()
             
             if not associado:
@@ -202,11 +203,6 @@ class AssociadoService:
         
         return None
     
-    def _limpar_cpf(self, cpf: str) -> str:
-        """Remove formatação do CPF"""
-        import re
-        return re.sub(r'[^\d]', '', cpf)
-    
     def importar_da_api(self, dados_api: Dict) -> Dict:
         """
         Importa ou atualiza associado a partir dos dados da API externa
@@ -222,7 +218,7 @@ class AssociadoService:
         """
         try:
             # Limpar CPF
-            cpf_limpo = self._limpar_cpf(dados_api['cpf'])
+            cpf_limpo = CPFUtils.limpar(dados_api['cpf'])
             
             # Verificar se associado já existe
             associado = Associado.query.filter_by(cpf=cpf_limpo).first()
@@ -284,7 +280,7 @@ class AssociadoService:
     def desativar_associado(self, cpf: str, motivo: str = None) -> Dict:
         """Desativa um associado"""
         try:
-            cpf_limpo = self._limpar_cpf(cpf)
+            cpf_limpo = CPFUtils.limpar(cpf)
             associado = Associado.query.filter_by(cpf=cpf_limpo).first()
             
             if not associado:
@@ -317,7 +313,7 @@ class AssociadoService:
         """Atualiza dados de um associado existente"""
         try:
             # Buscar associado pelo CPF original
-            cpf_limpo = self._limpar_cpf(cpf_original)
+            cpf_limpo = CPFUtils.limpar(cpf_original)
             associado = Associado.query.filter_by(cpf=cpf_limpo).first()
             
             if not associado:

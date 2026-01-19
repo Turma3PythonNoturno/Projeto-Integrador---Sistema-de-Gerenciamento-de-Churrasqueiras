@@ -84,7 +84,8 @@ class WebServiceSINSIND:
             return False, None, "Web service desabilitado"
         
         # Limpar CPF (apenas números)
-        cpf_limpo = ''.join(filter(str.isdigit, cpf))
+        from app.utils import CPFUtils
+        cpf_limpo = CPFUtils.limpar(cpf)
         if len(cpf_limpo) != 11:
             return False, None, "CPF deve conter 11 dígitos"
         

@@ -5,6 +5,7 @@ Sistema de Reserva de Churrasqueira - SINT-IFESGO
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from config import Config
+from app.utils import CPFUtils
 import os
 
 # Flag global para evitar inicialização duplicada
@@ -126,99 +127,119 @@ def create_app():
                 print("CPF: 123.456.789-01 | Senha: admin123")
             
             # Sincronizar associados da API e criar logins
-            print("\n" + "=" * 50)
-            print("SINCRONIZANDO ASSOCIADOS DA API...")
-            print("=" * 50)
-            try:
-                from app.services.associado_service import AssociadoService
-                import requests
-                
-                associado_service = AssociadoService()
-                config = Config()
-                
-                # Buscar associados da API
-                payload = {
-                    **config.WEB_SERVICE_CREDENTIALS,
-                    "acao": "listar_associados"
-                }
-                
-                response = requests.post(
-                    config.WEB_SERVICE_URL,
-                    json=payload,
-                    timeout=config.WEB_SERVICE_TIMEOUT,
-                    headers={'Content-Type': 'application/json'}
-                )
-                
-                associados_criados = 0
-                logins_criados = 0
-                logins_atualizados = 0
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    associados_raw = data.get('data', []) if data.get('status') == 'success' else data.get('associados', [])
-                    
-                    print(f"Total de associados encontrados na API: {len(associados_raw)}")
-                    
-                    for assoc in associados_raw:
-                        try:
-                            # Limpar CPF
-                            cpf_limpo = ''.join(filter(str.isdigit, assoc.get('cpf', '')))
-                            
-                            if len(cpf_limpo) != 11:
-                                continue  # CPF inválido, pular
-                            
-                            # Importar/atualizar associado no banco
-                            resultado = associado_service.importar_da_api(assoc)
-                            if resultado.get('acao') == 'criado':
-                                associados_criados += 1
-                            
-                            # Criar ou atualizar login
-                            login_existente = LoginSistema.query.filter_by(cpf=cpf_limpo).first()
-                            
-                            if not login_existente:
-                                # Criar novo login
-                                # Senha = 4 primeiros dígitos do CPF
-                                senha = cpf_limpo[:4]
-                                
-                                novo_login = LoginSistema(
-                                    cpf=cpf_limpo,
-                                    adm=0  # Associado comum, não admin
-                                )
-                                novo_login.definir_senha(senha)
-                                db.session.add(novo_login)
-                                logins_criados += 1
-                            else:
-                                # Login já existe, apenas garantir que não seja admin (exceto o admin padrão)
-                                if cpf_limpo != '12345678901' and login_existente.adm == 1:
-                                    login_existente.adm = 0
-                                    logins_atualizados += 1
-                        
-                        except Exception as e:
-                            print(f"Erro ao processar associado {assoc.get('cpf', 'N/A')}: {str(e)}")
-                            continue
-                    
-                    db.session.commit()
-                    
-                    print(f"\n✓ Associados criados/atualizados: {associados_criados}")
-                    print(f"✓ Logins criados: {logins_criados}")
-                    print(f"✓ Logins atualizados: {logins_atualizados}")
-                    print("\n" + "=" * 50)
-                    print("SINCRONIZAÇÃO CONCLUÍDA!")
-                    print("=" * 50)
-                    print("\nRegra de login para associados:")
-                    print("- Usuário: CPF (apenas números)")
-                    print("- Senha: 4 primeiros dígitos do CPF")
-                    print("=" * 50 + "\n")
-                else:
-                    print(f"Erro ao buscar associados da API: Status {response.status_code}")
-                    print("Os associados serão sincronizados quando a API estiver disponível.")
+            # Verificar arquivo de controle para evitar sincronizar repetidamente
+            sync_control_file = os.path.join(os.path.dirname(__file__), '.sync_done')
             
-            except Exception as e:
-                print(f"Erro ao sincronizar associados: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                db.session.rollback()
-                print("A aplicação continuará funcionando, mas os associados não foram sincronizados.")
+            if not os.path.exists(sync_control_file):
+                print("\n" + "=" * 50)
+                print("SINCRONIZANDO ASSOCIADOS DA API...")
+                print("=" * 50)
+                try:
+                    from app.services.associado_service import AssociadoService
+                    import requests
+                    
+                    associado_service = AssociadoService()
+                    config = Config()
+                    
+                    # Buscar associados da API
+                    payload = {
+                        **config.WEB_SERVICE_CREDENTIALS,
+                        "acao": "listar_associados"
+                    }
+                    
+                    response = requests.post(
+                        config.WEB_SERVICE_URL,
+                        json=payload,
+                        timeout=config.WEB_SERVICE_TIMEOUT,
+                        headers={'Content-Type': 'application/json'}
+                    )
+                    
+                    associados_criados = 0
+                    logins_criados = 0
+                    logins_atualizados = 0
+                    batch_size = 100  # Fazer commit a cada 100 registros
+                    contador = 0
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        associados_raw = data.get('data', []) if data.get('status') == 'success' else data.get('associados', [])
+                        
+                        print(f"Total de associados encontrados na API: {len(associados_raw)}")
+                        print("Sincronizando em lotes de 100 registros...")
+                        
+                        for assoc in associados_raw:
+                            try:
+                                # Limpar CPF
+                                cpf_limpo = CPFUtils.limpar(assoc.get('cpf', ''))
+                                
+                                if len(cpf_limpo) != 11:
+                                    continue  # CPF inválido, pular
+                                
+                                # Importar/atualizar associado no banco
+                                resultado = associado_service.importar_da_api(assoc)
+                                if resultado.get('acao') == 'criado':
+                                    associados_criados += 1
+                                
+                                # Criar ou atualizar login
+                                login_existente = LoginSistema.query.filter_by(cpf=cpf_limpo).first()
+                                
+                                if not login_existente:
+                                    # Criar novo login
+                                    # Senha = 4 primeiros dígitos do CPF
+                                    senha = cpf_limpo[:4]
+                                    
+                                    novo_login = LoginSistema(
+                                        cpf=cpf_limpo,
+                                        adm=0  # Associado comum, não admin
+                                    )
+                                    novo_login.definir_senha(senha)
+                                    db.session.add(novo_login)
+                                    logins_criados += 1
+                                else:
+                                    # Login já existe, apenas garantir que não seja admin (exceto o admin padrão)
+                                    if cpf_limpo != '12345678901' and login_existente.adm == 1:
+                                        login_existente.adm = 0
+                                        logins_atualizados += 1
+                            
+                            except Exception as e:
+                                print(f"Erro ao processar associado {assoc.get('cpf', 'N/A')}: {str(e)}")
+                                continue
+                            
+                            # Fazer commit a cada batch_size registros
+                            contador += 1
+                            if contador % batch_size == 0:
+                                db.session.commit()
+                                print(f"  ✓ {contador} registros processados...")
+                        
+                        # Commit final para registros restantes
+                        db.session.commit()
+                        
+                        print(f"\n✓ Associados criados/atualizados: {associados_criados}")
+                        print(f"✓ Logins criados: {logins_criados}")
+                        print(f"✓ Logins atualizados: {logins_atualizados}")
+                        print("\n" + "=" * 50)
+                        print("SINCRONIZAÇÃO CONCLUÍDA!")
+                        print("=" * 50)
+                        print("\nRegra de login para associados:")
+                        print("- Usuário: CPF (apenas números)")
+                        print("- Senha: 4 primeiros dígitos do CPF")
+                        print("=" * 50 + "\n")
+                        
+                        # Criar arquivo de controle
+                        with open(sync_control_file, 'w') as f:
+                            f.write('Sincronização concluída')
+                    else:
+                        print(f"Erro ao buscar associados da API: Status {response.status_code}")
+                        print("Os associados serão sincronizados quando a API estiver disponível.")
+                
+                except Exception as e:
+                    print(f"Erro ao sincronizar associados: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    db.session.rollback()
+                    print("A aplicação continuará funcionando, mas os associados não foram sincronizados.")
+            else:
+                print("✓ Sincronização já realizada anteriormente. Pulando...")
     
 
     return app
