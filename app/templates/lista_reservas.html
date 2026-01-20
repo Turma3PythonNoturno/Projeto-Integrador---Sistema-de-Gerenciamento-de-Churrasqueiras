@@ -35,6 +35,23 @@
     </div>
 </div>
 
+<!-- Modal Detalhes da Reserva -->
+<div id="modal-detalhes" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); z-index: 1000; overflow-y: auto; padding: 20px;">
+    <div style="background-color: white; padding: 30px; border-radius: 15px; max-width: 600px; width: 90%; margin: 20px auto; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);">
+        <button onclick="fecharModalDetalhes()" style="float: right; background: none; border: none; font-size: 28px; cursor: pointer; color: #999;">&times;</button>
+        
+        <h2 style="margin-top: 0; color: #8B4513; border-bottom: 2px solid #8B4513; padding-bottom: 10px;">Detalhes da Reserva</h2>
+        
+        <div id="detalhes-conteudo" style="margin-top: 20px;">
+            <!-- Content will be loaded via JavaScript -->
+        </div>
+        
+        <button onclick="fecharModalDetalhes()" class="btn" style="width: 100%; margin-top: 20px; background-color: #6c757d;">
+            Fechar
+        </button>
+    </div>
+</div>
+
 <div style="text-align: center; margin-bottom: 20px;">
     <a href="{{ url_for('dashboard.nova_reserva') }}" class="btn">
         Nova Reserva
@@ -94,15 +111,16 @@
                     </span>
                 </td>
                 <td style="padding: 15px;">
-                    {% if reserva.status == 'ativa' %}
-                        <div style="display: flex; gap: 5px;">
-                            {% if reserva.taxa and reserva.taxa.status == 'pendente' %}
-                                <button class="btn" style="background-color: #17a2b8; padding: 5px 10px; font-size: 12px;" onclick="exibirQRCodeLista({{ reserva.taxa.id }}, {{ reserva.taxa.valor }});" title="Ver QR Code Pix">QR Code</button>
+                    {% if reserva.to_dict().status == 'pendente' %}
+                        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                            <button class="btn" style="background-color: #0066cc; padding: 6px 12px; font-size: 12px;" onclick="verDetalhes({{ reserva.to_dict().id }});" title="Ver detalhes da reserva">Detalhes</button>
+                            {% if reserva.to_dict().taxa %}
+                                <button class="btn" style="background-color: #2c5234; padding: 6px 12px; font-size: 12px;" onclick="exibirQRCodeLista({{ reserva.to_dict().taxa.id }}, {{ reserva.to_dict().taxa.valor }});" title="Pagar via Pix">Pagar</button>
                             {% endif %}
-                            <button class="btn" style="background-color: #dc3545; padding: 5px 10px; font-size: 12px;" data-id="{{ reserva.to_dict().id }}" data-action="cancelar" title="Cancelar reserva">Cancelar</button>
+                            <button class="btn" style="background-color: #dc3545; padding: 6px 12px; font-size: 12px;" onclick="cancelarReserva({{ reserva.to_dict().id }});" title="Cancelar reserva">Cancelar</button>
                         </div>
                     {% else %}
-                        <small style="color: #666;">—</small>
+                        <button class="btn" style="background-color: #0066cc; padding: 6px 12px; font-size: 12px;" onclick="verDetalhes({{ reserva.to_dict().id }});" title="Ver detalhes da reserva">Detalhes</button>
                     {% endif %}
                 </td>
             </tr>
@@ -135,6 +153,10 @@
         document.getElementById('modal-qrcode-lista').style.display = 'none';
     }
 
+    function fecharModalDetalhes() {
+        document.getElementById('modal-detalhes').style.display = 'none';
+    }
+
     function exibirQRCodeLista(taxaId, valor) {
         fetch(`/api/taxa/qrcode-json/${taxaId}`)
         .then(response => response.json())
@@ -151,6 +173,145 @@
         .catch(error => {
             console.error('Erro:', error);
             alert('Erro ao carregar QR code');
+        });
+    }
+
+    function verDetalhes(reservaId) {
+        fetch(`/api/reserva/${reservaId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.sucesso) {
+                const reserva = data.reserva;
+                const statusColors = {
+                    'ativa': '#28a745',
+                    'pendente': '#ffc107',
+                    'cancelada': '#dc3545',
+                    'paga': '#17a2b8',
+                    'confirmada': '#007bff'
+                };
+                const statusColor = statusColors[reserva.status] || '#6c757d';
+                
+                let taxaHtml = '';
+                if (reserva.taxa) {
+                    taxaHtml = `
+                        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                            <h4 style="color: #2c5234; margin-top: 0;">Informações de Pagamento</h4>
+                            <p><strong>Valor:</strong> R$ ${reserva.taxa.valor.toFixed(2)}</p>
+                            <p><strong>Status:</strong> ${reserva.taxa.status}</p>
+                            ${reserva.taxa.vencimento ? `<p><strong>Vencimento:</strong> ${new Date(reserva.taxa.vencimento).toLocaleDateString('pt-BR')}</p>` : ''}
+                        </div>
+                    `;
+                }
+                
+                const html = `
+                    <div style="line-height: 1.8;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <p style="margin: 5px 0;"><strong>Data:</strong></p>
+                                <p style="margin: 5px 0; color: #666;">${reserva.data_reserva}</p>
+                            </div>
+                            <div>
+                                <p style="margin: 5px 0;"><strong>Horário:</strong></p>
+                                <p style="margin: 5px 0; color: #666;">${reserva.horario_inicio} - ${reserva.horario_fim}</p>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 5px 0;"><strong>Churrasqueira:</strong></p>
+                            <p style="margin: 5px 0; color: #666; font-size: 18px;">${reserva.churrasqueira_nome}</p>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 5px 0;"><strong>Responsável:</strong></p>
+                            <p style="margin: 5px 0; color: #666;">${reserva.nome}</p>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 5px 0;"><strong>CPF:</strong></p>
+                            <p style="margin: 5px 0; color: #666;">${reserva.cpf_associado || 'N/A'}</p>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <p style="margin: 5px 0;"><strong>Convidados:</strong></p>
+                                <p style="margin: 5px 0; color: #666;">${reserva.numero_convidados} pessoas</p>
+                            </div>
+                            <div>
+                                <p style="margin: 5px 0;"><strong>Status:</strong></p>
+                                <p style="margin: 5px 0;">
+                                    <span style="background-color: ${statusColor}; color: white; padding: 5px 15px; border-radius: 15px; font-size: 14px;">
+                                        ${reserva.status_display}
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                        
+                        ${reserva.email ? `
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 5px 0;"><strong>E-mail:</strong></p>
+                            <p style="margin: 5px 0; color: #666;">${reserva.email}</p>
+                        </div>
+                        ` : ''}
+                        
+                        ${reserva.telefone ? `
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 5px 0;"><strong>Telefone:</strong></p>
+                            <p style="margin: 5px 0; color: #666;">${reserva.telefone}</p>
+                        </div>
+                        ` : ''}
+                        
+                        ${reserva.observacoes ? `
+                        <div style="margin-bottom: 15px;">
+                            <p style="margin: 5px 0;"><strong>Observações:</strong></p>
+                            <p style="margin: 5px 0; color: #666; font-style: italic;">${reserva.observacoes}</p>
+                        </div>
+                        ` : ''}
+                        
+                        ${taxaHtml}
+                    </div>
+                `;
+                
+                document.getElementById('detalhes-conteudo').innerHTML = html;
+                document.getElementById('modal-detalhes').style.display = 'block';
+            } else {
+                alert('Erro ao carregar detalhes: ' + data.mensagem);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao carregar detalhes da reserva');
+        });
+    }
+
+    function cancelarReserva(reservaId) {
+        if (!confirm('Tem certeza que deseja cancelar esta reserva?')) {
+            return;
+        }
+        
+        const email = prompt('Por favor, confirme seu e-mail para cancelar a reserva:');
+        if (!email) {
+            return;
+        }
+        
+        fetch(`/api/cancelar-reserva/${reservaId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email: email })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.sucesso) {
+                alert('Reserva cancelada com sucesso!');
+                location.reload();
+            } else {
+                alert('Erro ao cancelar reserva: ' + data.mensagem);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao cancelar reserva');
         });
     }
 </script>

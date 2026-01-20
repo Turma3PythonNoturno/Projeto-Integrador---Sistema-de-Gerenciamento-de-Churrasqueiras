@@ -100,6 +100,37 @@ def confirmar_pagamento():
         }), 500
 
 
+@taxas_bp.route('/api/taxa/detalhes/<int:taxa_id>', methods=['GET'])
+def obter_detalhes_taxa(taxa_id):
+    """API to get fee details"""
+    if not verificar_admin():
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'Acesso negado'
+        }), 403
+    
+    try:
+        from app.models import Taxa
+        
+        taxa = Taxa.query.get(taxa_id)
+        if not taxa:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Taxa não encontrada'
+            }), 404
+        
+        return jsonify({
+            'sucesso': True,
+            'taxa': taxa.to_dict()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'Erro ao obter detalhes: {str(e)}'
+        }), 500
+
+
 @taxas_bp.route('/api/taxa/verificar-vencimentos', methods=['GET'])
 def verificar_vencimentos():
     """API to check for expired fees and mark them as overdue"""

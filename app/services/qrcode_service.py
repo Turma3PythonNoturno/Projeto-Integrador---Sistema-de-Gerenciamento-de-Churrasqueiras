@@ -15,7 +15,7 @@ class QRCodeService:
     """Serviço para gerar QR codes de pagamento Pix"""
     
     # Chave Pix da organização (exemplo fictício - atualizar com chave real)
-    PIX_KEY = "sint-ifesgo@example.com"  # Pode ser CPF, CNPJ, telefone, email ou chave aleatória
+    PIX_KEY = "03230664108"  # Pode ser CPF, CNPJ, telefone, email ou chave aleatória
     MERCHANT_NAME = "SINT-IFESGO"
     MERCHANT_CITY = "Goiania"
     
@@ -80,32 +80,74 @@ class QRCodeService:
     
     @staticmethod
     def _gerar_dados_pix(valor: Decimal, taxa_id: int, descricao: str) -> str:
-        """Gera string de dados Pix com padrão EMV
+        """Gera string de dados Pix com padrão EMV correto"""
         
-        Esta é uma implementação simplificada. Em produção, usar:
-        - Bacen Pix API
-        - Integrador Pix (como Gerencianet, Wirecard, etc)
-        - Banco próprio API
-        """
-        # Formato simplificado de Pix cópia-cola com valor
-        # Em produção, seria base32 com estrutura TLV EMV
-        
-        # Usar identificador único com taxa_id
+        # Identificador único da transação
         identificador_unico = f"TAXA{taxa_id:06d}"
         
-        # Valor com 2 casas decimais
-        valor_str = f"{valor:.2f}".replace('.', '')
+        # Formatar valor com 2 casas decimais
+        valor_str = f"{float(valor):.2f}"
         
-        # Montar dados Pix de exemplo (simulando formato real)
-        # Em produção, seria gerado através de API do banco
-        pix_string = (
-            f"00020126580014br.gov.bcb.pix0136"
-            f"sint-ifesgo@example.com5204000053039865"
-            f"4059{valor_str:0>10}5802BR5913SINT-IFESGO"
-            f"6009GOIANIA62{len(identificador_unico):02d}{identificador_unico}63041D3D"
-        )
+        # Obter dados configurados
+        chave_pix = QRCodeService.PIX_KEY
+        merchant_name = QRCodeService.MERCHANT_NAME[:25]  # Máximo 25 caracteres
+        merchant_city = QRCodeService.MERCHANT_CITY[:15]  # Máximo 15 caracteres
+        
+        # Construir payload no formato EMV (Tag-Length-Value)
+        
+        # Tag 26: Merchant Account Information
+        gui = "br.gov.bcb.pix"
+        tag_00 = f"00{len(gui):02d}{gui}"
+        tag_01 = f"01{len(chave_pix):02d}{chave_pix}"
+        tag_26_content = tag_00 + tag_01
+        tag_26 = f"26{len(tag_26_content):02d}{tag_26_content}"
+        
+        # Tag 52: Merchant Category Code (0000 para pessoa física)
+        tag_52 = "52040000"
+        
+        # Tag 53: Transaction Currency (986 = BRL)
+        tag_53 = "5303986"
+        
+        # Tag 54: Transaction Amount
+        tag_54 = f"54{len(valor_str):02d}{valor_str}"
+        
+        # Tag 58: Country Code
+        tag_58 = "5802BR"
+        
+        # Tag 59: Merchant Name
+        tag_59 = f"59{len(merchant_name):02d}{merchant_name}"
+        
+        # Tag 60: Merchant City
+        tag_60 = f"60{len(merchant_city):02d}{merchant_city}"
+        
+        # Tag 62: Additional Data Field Template (txid)
+        tag_05 = f"05{len(identificador_unico):02d}{identificador_unico}"
+        tag_62 = f"62{len(tag_05):02d}{tag_05}"
+        
+        # Montar payload sem CRC
+        payload = f"000201{tag_26}{tag_52}{tag_53}{tag_54}{tag_58}{tag_59}{tag_60}{tag_62}6304"
+        
+        # Calcular CRC16 CCITT
+        crc = QRCodeService._calcular_crc16(payload)
+        
+        # Payload final com CRC
+        pix_string = f"{payload}{crc}"
         
         return pix_string
+    
+    @staticmethod
+    def _calcular_crc16(payload: str) -> str:
+        """Calcula CRC16 CCITT (polinômio 0x1021) para validação Pix"""
+        crc = 0xFFFF
+        for char in payload:
+            crc ^= ord(char) << 8
+            for _ in range(8):
+                if crc & 0x8000:
+                    crc = (crc << 1) ^ 0x1021
+                else:
+                    crc = crc << 1
+                crc &= 0xFFFF
+        return f"{crc:04X}"
     
     @staticmethod
     def gerar_qrcode_svg(valor: Decimal, taxa_id: int, descricao: str = "Reserva de Churrasqueira") -> Dict:

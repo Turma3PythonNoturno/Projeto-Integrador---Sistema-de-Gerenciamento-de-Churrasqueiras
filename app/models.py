@@ -110,6 +110,18 @@ class Reserva(db.Model):
     
     def to_dict(self):
         try: 
+            taxa_info = None
+            if getattr(self, 'taxas', None):
+                taxa_ord = sorted(self.taxas, key=lambda t: t.id or 0, reverse=True)
+                if taxa_ord:
+                    t = taxa_ord[0]
+                    taxa_info = {
+                        'id': t.id,
+                        'valor': float(t.valor or 0),
+                        'status': t.status or '',
+                        'vencimento': t.vencimento.strftime('%Y-%m-%d') if getattr(t, 'vencimento', None) else None
+                    }
+
             return {
                 'id': self.id,
                 'nome': self.nome or '',
@@ -126,7 +138,8 @@ class Reserva(db.Model):
                 'status': self.status,
                 'status_display': self._get_status_display() if hasattr(self, '_get_status_display') else self.status,
                 'data_criacao': self.data_criacao.strftime('%d/%m/%Y %H:%M') if self.data_criacao else '',
-                'observacoes': self.observacoes or ''
+                'observacoes': self.observacoes or '',
+                'taxa': taxa_info
             }
         except Exception as e:
             return {

@@ -214,3 +214,141 @@ def verificar(cpf):
             'encontrado': False,
             'mensagem': f'Erro interno: {str(e)}'
         }), 500
+
+
+@associados_bp.route('/api/associado/detalhes/<cpf>')
+def obter_detalhes_associado(cpf):
+    """API to get associado details from SINSIND API"""
+    if not verificar_admin():
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'Acesso negado'
+        }), 403
+    
+    try:
+        config = Config()
+        payload = {
+            **config.WEB_SERVICE_CREDENTIALS,
+            "acao": "listar_associados"
+        }
+        
+        response = requests.post(
+            config.WEB_SERVICE_URL,
+            json=payload,
+            timeout=config.WEB_SERVICE_TIMEOUT,
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            associados_raw = data.get('data', []) if data.get('status') == 'success' else data.get('associados', [])
+            
+            # Limpar CPF para comparação
+            cpf_limpo = CPFUtils.limpar(cpf)
+            
+            # Procurar associado na lista
+            for assoc in associados_raw:
+                if CPFUtils.limpar(assoc.get('cpf', '')) == cpf_limpo:
+                    # Formatar dados conforme esperado pelo frontend
+                    detalhes = {
+                        'nome': assoc.get('nome') or '',
+                        'cpf': CPFUtils.formatar(assoc.get('cpf', '')),
+                        'cpf_formatado': CPFUtils.formatar(assoc.get('cpf', '')),
+                        'email': assoc.get('email') or 'Não informado',
+                        'telefone': assoc.get('telefone') or 'Não informado',
+                        'codigo': assoc.get('codigo') or '',
+                        'categoria': assoc.get('categoria') or '',
+                        'situacao': assoc.get('situacao') or '',
+                        'inadimplencia': assoc.get('inadimplencia') or 'SIM',
+                        'status_adimplencia': 'adimplente' if (assoc.get('inadimplencia') or '').upper() == 'NÃO' else 'inadimplente',
+                        'status_display': 'Adimplente' if (assoc.get('inadimplencia') or '').upper() == 'NÃO' else 'Inadimplente',
+                        'pode_reservar': (assoc.get('inadimplencia') or '').upper() == 'NÃO',
+                        'ativo': True,
+                        'data_cadastro': 'N/A',
+                        'data_ultimo_pagamento': None
+                    }
+                    
+                    return jsonify({
+                        'sucesso': True,
+                        'detalhes': detalhes
+                    })
+            
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Associado não encontrado'
+            }), 404
+        else:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Erro ao conectar com API'
+            }), 500
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'Erro ao obter detalhes: {str(e)}'
+        }), 500
+
+
+@associados_bp.route('/api/associado/buscar/<cpf>')
+def buscar_associado(cpf):
+    """API to search and get associado for editing from SINSIND API"""
+    if not verificar_admin():
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'Acesso negado'
+        }), 403
+    
+    try:
+        config = Config()
+        payload = {
+            **config.WEB_SERVICE_CREDENTIALS,
+            "acao": "listar_associados"
+        }
+        
+        response = requests.post(
+            config.WEB_SERVICE_URL,
+            json=payload,
+            timeout=config.WEB_SERVICE_TIMEOUT,
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            associados_raw = data.get('data', []) if data.get('status') == 'success' else data.get('associados', [])
+            
+            # Limpar CPF para comparação
+            cpf_limpo = CPFUtils.limpar(cpf)
+            
+            # Procurar associado na lista
+            for assoc in associados_raw:
+                if CPFUtils.limpar(assoc.get('cpf', '')) == cpf_limpo:
+                    # Garantir que todos os campos tem valor padrão se forem None
+                    resultado = {
+                        'codigo': assoc.get('codigo') or '',
+                        'cpf': assoc.get('cpf') or '',
+                        'nome': assoc.get('nome') or '',
+                        'categoria': assoc.get('categoria') or '',
+                        'situacao': assoc.get('situacao') or '',
+                        'inadimplencia': assoc.get('inadimplencia') or '',
+                        'lotacao': assoc.get('lotacao') or ''
+                    }
+                    
+                    return jsonify(resultado)
+            
+            return jsonify({
+                'erro': 'Associado não encontrado'
+            }), 404
+        else:
+            return jsonify({
+                'erro': 'Erro ao conectar com API'
+            }), 500
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'erro': f'Erro ao buscar associado: {str(e)}'
+        }), 500

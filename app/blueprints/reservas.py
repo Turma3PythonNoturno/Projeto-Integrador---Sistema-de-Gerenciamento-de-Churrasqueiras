@@ -4,8 +4,9 @@ Handles reservation management (list, create, edit, cancel)
 """
 
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session
+from datetime import datetime
 from app.container import container
-from app.models import Reserva
+from app.models import Reserva, Churrasqueira
 from app.utils import CPFUtils
 
 reservas_bp = Blueprint('reservas', __name__)
@@ -43,7 +44,7 @@ def listar():
         print(f"Usuário: {cpf_usuario} | Admin: {is_admin}")
         print(f"Total de reservas encontradas: {len(reservas_data)}")
         for r in reservas_data:
-            print(f"Reserva: {r.get('nome')} - {r.get('data_reserva')} - CPF: {r.get('cpf_associado')}")
+            print(f"Reserva: {r.get('nome')} - {r.get('data_reserva')} - CPF: {r.get('cpf_associado')} - Status: {r.get('status')} - Taxa: {r.get('taxa')}")
         print(f"=== FIM DEBUG ===\n")
         
         # Convert to template-compatible objects
@@ -98,6 +99,57 @@ def verificar_disponibilidade():
             'disponivel': False, 
             'mensagem': f'Erro interno: {str(e)}'
         }), 500
+
+
+@reservas_bp.route('/api/reservas/disponiveis')
+def listar_churrasqueiras_disponiveis():
+    """Lista churrasqueiras disponíveis para um intervalo de data/horário."""
+    data_str = request.args.get('data')
+    inicio_str = request.args.get('inicio')
+    fim_str = request.args.get('fim')
+
+    if not all([data_str, inicio_str, fim_str]):
+        return jsonify({
+            'disponiveis': [],
+            'mensagem': 'Parâmetros obrigatórios: data, inicio, fim'
+        }), 400
+
+    try:
+        data_reserva = datetime.strptime(data_str, '%Y-%m-%d').date()
+        horario_inicio = datetime.strptime(inicio_str, '%H:%M').time()
+        horario_fim = datetime.strptime(fim_str, '%H:%M').time()
+    except ValueError:
+        return jsonify({
+            'disponiveis': [],
+            'mensagem': 'Formato inválido de data ou horário'
+        }), 400
+
+    # Buscar churrasqueiras ocupadas no intervalo
+    reservas_conflitantes = Reserva.query.filter(
+        Reserva.data_reserva == data_reserva,
+        Reserva.status.in_(('ativa', 'pendente', 'paga', 'confirmada')),
+        Reserva.horario_inicio < horario_fim,
+        Reserva.horario_fim > horario_inicio
+    ).all()
+
+    ids_ocupadas = {r.churrasqueira_id for r in reservas_conflitantes}
+
+    # Churrasqueiras livres
+    churrasqueiras_livres = Churrasqueira.query.filter(~Churrasqueira.id.in_(ids_ocupadas)).all()
+
+    disponiveis = [
+        {
+            'id': ch.id,
+            'nome': ch.nome,
+            'preco': float(ch.preco or 0)
+        }
+        for ch in churrasqueiras_livres
+    ]
+
+    return jsonify({
+        'disponiveis': disponiveis,
+        'mensagem': 'Churrasqueiras disponíveis retornadas com sucesso'
+    })
 
 
 @reservas_bp.route('/api/criar-reserva', methods=['POST'])
@@ -214,5 +266,47 @@ def api_listar_reservas():
     except Exception as e:
         return jsonify({
             'sucesso': False, 
+            'mensagem': f'Erro interno: {str(e)}'
+        }), 500
+
+
+@reservas_bp.route('/api/reserva/<int:reserva_id>', methods=['GET'])
+def obter_detalhes_reserva(reserva_id):
+    """API to get reservation details"""
+    # Check if user is logged in
+    if 'usuario_logado' not in session:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'Você precisa estar logado para ver detalhes da reserva'
+        }), 401
+    
+    try:
+        is_admin = session.get('is_admin', False)
+        cpf_usuario = session.get('cpf')
+        
+        # Get reservation from database
+        reserva = Reserva.query.get(reserva_id)
+        if not reserva:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Reserva não encontrada'
+            }), 404
+        
+        # Verify reservation belongs to user (except if admin)
+        if not is_admin and reserva.cpf_associado != cpf_usuario:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Você só pode ver detalhes das suas próprias reservas'
+            }), 403
+        
+        # Return reservation details
+        return jsonify({
+            'sucesso': True,
+            'reserva': reserva.to_dict()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
             'mensagem': f'Erro interno: {str(e)}'
         }), 500

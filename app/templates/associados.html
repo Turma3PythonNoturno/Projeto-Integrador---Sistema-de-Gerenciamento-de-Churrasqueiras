@@ -405,7 +405,10 @@ function verDetalhes(cpf) {
                         <p><strong>Status:</strong> <span class="status-badge status-${detalhes.status_adimplencia}">${detalhes.status_display}</span></p>
                     </div>
                     <div>
-                        <h4>Histórico</h4>
+                        <h4>Informações do Cadastro</h4>
+                        <p><strong>Categoria:</strong> ${detalhes.categoria}</p>
+                        <p><strong>Situação:</strong> ${detalhes.situacao}</p>
+                        <p><strong>Código:</strong> ${detalhes.codigo}</p>
                         <p><strong>Cadastro:</strong> ${detalhes.data_cadastro}</p>
                         <p><strong>Último Pagamento:</strong> ${detalhes.data_ultimo_pagamento || 'Nunca'}</p>
                     </div>
