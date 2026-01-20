@@ -96,4 +96,84 @@ def confirmar_pagamento():
             'sucesso': False,
             'mensagem': f'Erro interno: {str(e)}'
         }), 500
-# - /api/taxa/marcar-paga
+
+
+@taxas_bp.route('/api/taxa/verificar-vencimentos', methods=['GET'])
+def verificar_vencimentos():
+    """API to check for expired fees and mark them as overdue"""
+    if not verificar_admin():
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'Acesso negado'
+        }), 403
+    
+    try:
+        resultado = taxa_service.verificar_vencimentos()
+        return jsonify(resultado)
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'Erro ao verificar vencimentos: {str(e)}'
+        }), 500
+
+
+@taxas_bp.route('/api/taxa/relatorio')
+def gerar_relatorio():
+    """API to generate fee report (CSV or PDF)"""
+    if not verificar_admin():
+        flash('Acesso negado', 'danger')
+        return redirect(url_for('dashboard.inicio'))
+    
+    try:
+        periodo = request.args.get('periodo')  # Format: YYYY-MM
+        
+        resultado = taxa_service.gerar_relatorio(periodo)
+        
+        if resultado.get('sucesso'):
+            # Return CSV content with proper UTF-8 encoding
+            from flask import Response
+            conteudo = resultado.get('conteudo', '')
+            # Converter para bytes com encoding UTF-8
+            conteudo_bytes = conteudo.encode('utf-8')
+            return Response(
+                conteudo_bytes,
+                mimetype='text/csv; charset=utf-8',
+                headers={
+                    'Content-Disposition': f'attachment; filename="relatorio_taxas_{periodo or "completo"}.csv"',
+                    'Content-Type': 'text/csv; charset=utf-8'
+                }
+            )
+        else:
+            flash('Erro ao gerar relatório', 'danger')
+            return redirect(url_for('taxas.listar'))
+            
+    except Exception as e:
+        flash(f'Erro: {str(e)}', 'danger')
+        return redirect(url_for('taxas.listar'))
+
+
+@taxas_bp.route('/api/taxa/comprovante/<int:taxa_id>')
+def gerar_comprovante(taxa_id):
+    """API to generate payment receipt"""
+    if not verificar_admin():
+        flash('Acesso negado', 'danger')
+        return redirect(url_for('dashboard.inicio'))
+    
+    try:
+        resultado = taxa_service.gerar_comprovante(taxa_id)
+        
+        if resultado.get('sucesso'):
+            # Return PDF content
+            from flask import Response
+            return Response(
+                resultado.get('conteudo', b''),
+                mimetype='application/pdf',
+                headers={'Content-Disposition': f'attachment; filename="comprovante_taxa_{taxa_id}.pdf"'}
+            )
+        else:
+            flash('Erro ao gerar comprovante', 'danger')
+            return redirect(url_for('taxas.listar'))
+            
+    except Exception as e:
+        flash(f'Erro: {str(e)}', 'danger')
+        return redirect(url_for('taxas.listar'))

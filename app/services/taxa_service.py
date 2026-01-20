@@ -263,3 +263,161 @@ class TaxaService:
                 'taxas_canceladas': len([t for t in taxas if t.status == 'cancelado'])
             }
         }
+    
+    def verificar_vencimentos(self) -> Dict:
+        """Verifica e atualiza status de taxas vencidas"""
+        try:
+            hoje = date.today()
+            
+            # Buscar taxas pendentes com vencimento no passado
+            taxas_vencidas = Taxa.query.filter(
+                Taxa.status == 'pendente',
+                Taxa.data_vencimento < hoje
+            ).all()
+            
+            processadas = 0
+            for taxa in taxas_vencidas:
+                taxa.marcar_como_vencida()
+                processadas += 1
+            
+            if processadas > 0:
+                db.session.commit()
+            
+            # Contar total de taxas vencidas
+            total_vencidas = Taxa.query.filter_by(status='vencido').count()
+            
+            return {
+                'sucesso': True,
+                'mensagem': f'{processadas} taxa(s) marcada(s) como vencida(s)',
+                'processadas': processadas,
+                'vencidas': total_vencidas
+            }
+        except Exception as e:
+            db.session.rollback()
+            return {
+                'sucesso': False,
+                'mensagem': f'Erro ao verificar vencimentos: {str(e)}',
+                'processadas': 0,
+                'vencidas': 0
+            }
+    
+    def gerar_relatorio(self, periodo: Optional[str] = None) -> Dict:
+        """Gera relatório de taxas em formato CSV
+        
+        Args:
+            periodo: String no formato YYYY-MM para filtrar por mês/ano
+        """
+        try:
+            query = Taxa.query
+            
+            # Filtrar por período se fornecido
+            if periodo:
+                try:
+                    from datetime import datetime as dt
+                    mes_ano = dt.strptime(periodo, '%Y-%m')
+                    data_inicio = mes_ano.date()
+                    # Próximo mês
+                    if mes_ano.month == 12:
+                        data_fim = data_inicio.replace(year=mes_ano.year + 1, month=1)
+                    else:
+                        data_fim = data_inicio.replace(month=mes_ano.month + 1)
+                    
+                    query = query.filter(
+                        Taxa.data_criacao >= datetime.combine(data_inicio, datetime.min.time()),
+                        Taxa.data_criacao < datetime.combine(data_fim, datetime.min.time())
+                    )
+                except ValueError:
+                    return {
+                        'sucesso': False,
+                        'mensagem': 'Formato de período inválido. Use YYYY-MM'
+                    }
+            
+            taxas = query.all()
+            
+            # Gerar CSV com encoding UTF-8 explícito
+            linhas = ['ID,CPF Associado,Tipo,Valor,Status,Data Vencimento,Data Criacao,Reserva ID\n']
+            
+            for taxa in taxas:
+                linha = f'{taxa.id},{taxa.associado_cpf},{taxa.tipo},R$ {taxa.valor:.2f},{taxa.status},'
+                linha += f'{taxa.data_vencimento.strftime("%d/%m/%Y") if taxa.data_vencimento else "N/A"},'
+                linha += f'{taxa.data_criacao.strftime("%d/%m/%Y %H:%M") if taxa.data_criacao else "N/A"},'
+                linha += f'{taxa.reserva_id or "N/A"}\n'
+                linhas.append(linha)
+            
+            conteudo = ''.join(linhas)
+            # Garantir encoding UTF-8
+            conteudo = conteudo.encode('utf-8').decode('utf-8')
+            
+            return {
+                'sucesso': True,
+                'conteudo': conteudo,
+                'total_linhas': len(taxas)
+            }
+            
+        except Exception as e:
+            return {
+                'sucesso': False,
+                'mensagem': f'Erro ao gerar relatório: {str(e)}'
+            }
+    
+    def gerar_comprovante(self, taxa_id: int) -> Dict:
+        """Gera comprovante de pagamento em formato texto/HTML"""
+        try:
+            taxa = Taxa.query.get(taxa_id)
+            
+            if not taxa:
+                return {
+                    'sucesso': False,
+                    'mensagem': 'Taxa não encontrada'
+                }
+            
+            # Gerar HTML do comprovante
+            html = f"""
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>Comprovante de Taxa</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                    .header {{ text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; }}
+                    .section {{ margin: 20px 0; padding: 10px; }}
+                    .label {{ font-weight: bold; }}
+                    table {{ width: 100%; border-collapse: collapse; }}
+                    td {{ padding: 8px; border: 1px solid #ddd; }}
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h2>COMPROVANTE DE TAXA</h2>
+                    <p>SINT-IFESGO - Sistema de Reserva de Churrasqueira</p>
+                </div>
+                
+                <div class="section">
+                    <p><span class="label">ID da Taxa:</span> {taxa.id}</p>
+                    <p><span class="label">CPF do Associado:</span> {taxa.associado_cpf}</p>
+                    <p><span class="label">Tipo:</span> {taxa.tipo.upper()}</p>
+                    <p><span class="label">Valor:</span> R$ {taxa.valor:.2f}</p>
+                    <p><span class="label">Status:</span> {taxa.status.upper()}</p>
+                    <p><span class="label">Data de Vencimento:</span> {taxa.data_vencimento.strftime("%d/%m/%Y") if taxa.data_vencimento else "N/A"}</p>
+                    <p><span class="label">Data de Criação:</span> {taxa.data_criacao.strftime("%d/%m/%Y %H:%M") if taxa.data_criacao else "N/A"}</p>
+                    <p><span class="label">Código de Pagamento:</span> {taxa.codigo_pagamento or "N/A"}</p>
+                </div>
+                
+                <div class="section" style="margin-top: 40px; text-align: center; color: #666; font-size: 12px;">
+                    <p>Documento gerado automaticamente pelo sistema SINT-IFESGO</p>
+                    <p>Gerado em: {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}</p>
+                </div>
+            </body>
+            </html>
+            """
+            
+            return {
+                'sucesso': True,
+                'conteudo': html
+            }
+            
+        except Exception as e:
+            return {
+                'sucesso': False,
+                'mensagem': f'Erro ao gerar comprovante: {str(e)}'
+            }
