@@ -6,7 +6,7 @@
 <h2 style="text-align: center; margin-bottom: 30px;">{{ titulo|default('Reservas da Churrasqueira') }}</h2>
 
 <div style="text-align: center; margin-bottom: 20px;">
-    <a href="{{ url_for('routes.nova_reserva') }}" class="btn">
+    <a href="{{ url_for('dashboard.nova_reserva') }}" class="btn">
         Nova Reserva
     </a>
 </div>
@@ -89,7 +89,7 @@
     <p style="color: #6c757d; margin: 20px 0;">
         Não há reservas ativas para os próximos dias.
     </p>
-    <a href="{{ url_for('routes.nova_reserva') }}" class="btn">
+    <a href="{{ url_for('dashboard.nova_reserva') }}" class="btn">
         Fazer Primeira Reserva
     </a>
 </div>

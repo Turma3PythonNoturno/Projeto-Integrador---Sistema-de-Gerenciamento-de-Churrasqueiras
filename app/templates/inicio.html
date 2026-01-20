@@ -17,11 +17,11 @@
     </p>
     
     <div style="display: flex; justify-content: center; gap: 20px; margin: 40px 0; flex-wrap: wrap;">
-        <a href="{{ url_for('routes.nova_reserva') }}" class="btn" style="text-decoration: none; display: inline-block;">
+        <a href="{{ url_for('dashboard.nova_reserva') }}" class="btn" style="text-decoration: none; display: inline-block;">
             Fazer Nova Reserva
         </a>
         
-        <a href="{{ url_for('routes.listar_reservas') }}" class="btn btn-secondary" style="text-decoration: none; display: inline-block;">
+        <a href="{{ url_for('reservas.listar') }}" class="btn btn-secondary" style="text-decoration: none; display: inline-block;">
             Ver Reservas Existentes
         </a>
     </div>
