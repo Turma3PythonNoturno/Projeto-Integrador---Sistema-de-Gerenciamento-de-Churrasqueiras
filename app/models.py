@@ -110,6 +110,11 @@ class Reserva(db.Model):
     
     def to_dict(self):
         try: 
+            # Obter preço da churrasqueira
+            preco = 0.0
+            if hasattr(self, 'churrasqueira') and self.churrasqueira:
+                preco = float(self.churrasqueira.preco) if self.churrasqueira.preco else 0.0
+            
             return {
                 'id': self.id,
                 'nome': self.nome or '',
@@ -118,6 +123,8 @@ class Reserva(db.Model):
                 'cpf_associado': self.cpf_associado or '',
                 'churrasqueira_id': self.churrasqueira_id or '',
                 'churrasqueira_nome': getattr(self.churrasqueira, 'nome', '') if hasattr(self, 'churrasqueira') else '',
+                'preco': preco,
+                'preco_formatado': f'R$ {preco:.2f}'.replace('.', ','),
                 'data_reserva': self.data_reserva.strftime('%d/%m/%Y') if self.data_reserva else '',
                 'data_reserva_iso': self.data_reserva.strftime('%Y-%m-%d') if self.data_reserva else '',
                 'horario_inicio': self.horario_inicio.strftime('%H:%M') if self.horario_inicio else '',
@@ -137,6 +144,8 @@ class Reserva(db.Model):
                 'cpf_associado': '',
                 'churrasqueira_id': None,
                 'churrasqueira_nome': '',
+                'preco': 0.0,
+                'preco_formatado': 'N/A',
                 'data_reserva': '',
                 'data_reserva_iso': '',
                 'horario_inicio': '',
