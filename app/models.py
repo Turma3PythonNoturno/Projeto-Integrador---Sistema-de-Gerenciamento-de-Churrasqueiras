@@ -162,11 +162,15 @@ class Reserva(db.Model):
     
    
     @classmethod
-    def verificar_disponibilidade(cls, data_reserva, horario_inicio, horario_fim, churrasqueira_id, excluir_id=None):
+    def verificar_disponibilidade(cls, churrasqueira_id, data_reserva, horario_inicio, horario_fim, excluir_id=None):
+        """Verifica disponibilidade para a churrasqueira específica.
+
+        Assinatura ajustada para corresponder aos testes: (churrasqueira_id, data, inicio, fim).
+        """
         query = cls.query.filter(
             cls.data_reserva == data_reserva,
             cls.churrasqueira_id == churrasqueira_id,
-            cls.status.in_(('ativa', 'paga', 'pendente'))
+            cls.status.in_(('ativa', 'paga', 'pendente', 'confirmada'))
         )
 
         if excluir_id:
@@ -190,7 +194,7 @@ class Reserva(db.Model):
         reservas = cls.query.filter(
             cls.data_reserva == data_reserva,
             cls.churrasqueira_id == churrasqueira_id,
-            cls.status.in_(('ativa', 'paga', 'pendente'))
+            cls.status.in_(('ativa', 'paga', 'pendente', 'confirmada'))
         ).all()
 
         return [
@@ -262,7 +266,7 @@ class Associado(db.Model):
     lotacao = db.Column(db.String(200), nullable=True)  # Lotação do servidor
     categoria = db.Column(db.String(50), nullable=True)  # PENSIONISTA, SERVIDOR, etc
     situacao = db.Column(db.String(50), nullable=True)  # FILIADO, NÃO FILIADO
-    inadimplencia = db.Column(db.String(10), default='NÃO')  # SIM, NÃO
+    inadimplencia = db.Column(db.String(10), nullable=True, default=None)  # SIM, NÃO
     
     # Campos locais opcionais
     email = db.Column(db.String(100), nullable=True)
@@ -288,12 +292,23 @@ class Associado(db.Model):
     
     @property
     def status_adimplencia(self):
-        """Retorna status de adimplência baseado no campo inadimplencia"""
-        return 'inadimplente' if self.inadimplencia == 'SIM' else 'adimplente'
+        """Retorna status de adimplência baseado no campo inadimplencia.
+
+        Considera adimplente somente quando `inadimplencia` é explicitamente 'NÃO'.
+        """
+        valor = str(self.inadimplencia or '').upper()
+        nao_vals = {'NÃO', 'NAO', 'NO', 'N'}
+        return 'adimplente' if valor in nao_vals else 'inadimplente'
     
     def is_adimplente(self):
-        """Verifica se o associado está adimplente"""
-        return self.inadimplencia != 'SIM' and self.ativo
+        """Verifica se o associado está adimplente.
+
+        Apenas considera adimplente quando `inadimplencia` == 'NÃO'.
+        Valores ausentes ou diferentes de 'NÃO' são tratados como inadimplente.
+        """
+        valor = str(self.inadimplencia or '').upper()
+        nao_vals = {'NÃO', 'NAO', 'NO', 'N'}
+        return (valor in nao_vals) and self.ativo
     
     def pode_fazer_reserva(self):
         """Verifica se o associado pode fazer reserva"""

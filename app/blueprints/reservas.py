@@ -79,6 +79,7 @@ def verificar_disponibilidade():
     data_str = request.args.get('data')
     horario_inicio_str = request.args.get('horario_inicio')
     horario_fim_str = request.args.get('horario_fim')
+    churrasqueira_id_str = request.args.get('churrasqueira_id')
     
     if not all([data_str, horario_inicio_str, horario_fim_str]):
         return jsonify({
@@ -88,7 +89,7 @@ def verificar_disponibilidade():
     
     try:
         resultado = reserva_service.verificar_disponibilidade(
-            data_str, horario_inicio_str, horario_fim_str
+            data_str, horario_inicio_str, horario_fim_str, churrasqueira_id_str
         )
         return jsonify(resultado)
         

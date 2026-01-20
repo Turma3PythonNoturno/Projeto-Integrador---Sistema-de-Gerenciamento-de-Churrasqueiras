@@ -243,8 +243,11 @@ class ReservaService:
         
         return self._repositorio.listar_reservas_ativas(hoje, data_limite)
     
-    def verificar_disponibilidade(self, data_str: str, horario_inicio_str: str, horario_fim_str: str) -> Dict:
-        """Verifica disponibilidade de um horário específico"""
+    def verificar_disponibilidade(self, data_str: str, horario_inicio_str: str, horario_fim_str: str, churrasqueira_id_str: Optional[str] = None) -> Dict:
+        """Verifica disponibilidade de um horário específico.
+
+        Opcionalmente recebe `churrasqueira_id_str` para verificar apenas um equipamento.
+        """
         try:
             # Converter strings para objetos
             data_reserva = datetime.strptime(data_str, '%Y-%m-%d').date()
@@ -270,8 +273,15 @@ class ReservaService:
                 }
             
             # Verificar disponibilidade no repositório
+            churrasqueira_id = None
+            if churrasqueira_id_str is not None and str(churrasqueira_id_str).strip() != '':
+                try:
+                    churrasqueira_id = int(churrasqueira_id_str)
+                except ValueError:
+                    churrasqueira_id = None
+
             disponivel, mensagem = self._repositorio.verificar_disponibilidade(
-                data_reserva, horario_inicio, horario_fim
+                data_reserva, horario_inicio, horario_fim, churrasqueira_id
             )
             
             # Obter horários ocupados para informação adicional

@@ -5,7 +5,7 @@ Tests complete reservation creation workflow
 
 import pytest
 from datetime import date, time, timedelta
-from app.models import Reserva, Taxa
+from app.models import Reserva, Taxa, Associado
 
 
 class TestReservaCreationFlow:

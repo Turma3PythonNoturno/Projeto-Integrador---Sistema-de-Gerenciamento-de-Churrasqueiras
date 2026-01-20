@@ -82,7 +82,7 @@ class ReservaRepository(IReservaRepository):
                 reservas_conflitantes = ReservaModel.query.filter(
                     ReservaModel.data_reserva == data,
                     ReservaModel.churrasqueira_id == churrasqueira_id,
-                    ReservaModel.status.in_(('ativa', 'pendente', 'paga')),
+                    ReservaModel.status.in_(('ativa', 'pendente', 'paga', 'confirmada')),
                     ReservaModel.horario_inicio < fim,
                     ReservaModel.horario_fim > inicio
                 ).all()
@@ -105,7 +105,7 @@ class ReservaRepository(IReservaRepository):
             # Reservas ativas/pagas/pendentes que conflitam no dia e horário
             reservas_conflitantes = ReservaModel.query.filter(
                 ReservaModel.data_reserva == data,
-                ReservaModel.status.in_(('ativa', 'pendente', 'paga')),
+                ReservaModel.status.in_(('ativa', 'pendente', 'paga', 'confirmada')),
                 ReservaModel.horario_inicio < fim,
                 ReservaModel.horario_fim > inicio
             ).all()
