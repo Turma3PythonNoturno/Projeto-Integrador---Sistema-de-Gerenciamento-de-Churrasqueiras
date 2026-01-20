@@ -346,31 +346,47 @@
             const select = document.getElementById("churrasqueira_id");
 
             if (!data || !inicio || !fim) {
+                console.log("Campos incompletos: data=" + data + ", inicio=" + inicio + ", fim=" + fim);
                 return; // Espera todos os campos serem preenchidos
             }
 
-            console.log("Buscando churrasqueiras disponíveis...");
+            console.log("🔄 Buscando churrasqueiras disponíveis...");
+            console.log("Data: " + data);
+            console.log("Horário: " + inicio + " - " + fim);
 
             fetch(`/reservas/disponiveis?data=${data}&inicio=${inicio}&fim=${fim}`)
-                .then(r => r.json())
+                .then(r => {
+                    console.log("Status da resposta:", r.status);
+                    if (!r.ok) {
+                        throw new Error(`Erro HTTP ${r.status}`);
+                    }
+                    return r.json();
+                })
                 .then(json => {
-                    console.log("Resposta:", json);
+                    console.log("✅ Resposta recebida:", json);
 
                     select.innerHTML = '<option value="">Selecione...</option>';
 
                     if (!json.disponiveis || json.disponiveis.length === 0) {
-                        select.innerHTML = '<option value="">Nenhuma disponível</option>';
+                        console.warn("⚠️ Nenhuma churrasqueira disponível");
+                        select.innerHTML = '<option value="">Nenhuma disponível neste horário</option>';
                         return;
                     }
 
+                    console.log("✅ " + json.disponiveis.length + " churrasqueira(s) disponível(is)");
+                    
                     json.disponiveis.forEach(ch => {
+                        console.log("  - " + ch.nome + " (ID: " + ch.id + ")");
                         const op = document.createElement("option");
                         op.value = ch.id;
                         op.textContent = ch.nome;
                         select.appendChild(op);
                     });
                 })
-                .catch(err => console.error("Erro ao buscar disponíveis:", err));
+                .catch(err => {
+                    console.error("❌ Erro ao buscar churrasqueiras:", err);
+                    select.innerHTML = '<option value="">Erro ao carregar (verifique console)</option>';
+                });
         }
 
         document.getElementById("churrasqueira_id").addEventListener("change", function () {

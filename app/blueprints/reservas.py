@@ -5,8 +5,9 @@ Handles reservation management (list, create, edit, cancel)
 
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session
 from app.container import container
-from app.models import Reserva
+from app.models import Reserva, Churrasqueira
 from app.utils import CPFUtils
+from datetime import datetime
 
 reservas_bp = Blueprint('reservas', __name__)
 
@@ -215,4 +216,81 @@ def api_listar_reservas():
         return jsonify({
             'sucesso': False, 
             'mensagem': f'Erro interno: {str(e)}'
+        }), 500
+
+
+@reservas_bp.route('/reservas/disponiveis', methods=['GET'])
+def churrasqueiras_disponiveis():
+    """API to get available grills for a given date and time range"""
+    try:
+        data_str = request.args.get("data")
+        inicio_str = request.args.get("inicio")
+        fim_str = request.args.get("fim")
+
+        print(f"\n=== DEBUG /disponiveis ===")
+        print(f"data_str: {data_str}")
+        print(f"inicio_str: {inicio_str}")
+        print(f"fim_str: {fim_str}")
+
+        if not data_str or not inicio_str or not fim_str:
+            print("Erro: Parâmetros insuficientes")
+            return jsonify({"erro": "Parâmetros insuficientes"}), 400
+
+        # Convert strings to proper formats
+        data = datetime.strptime(data_str, "%Y-%m-%d").date()
+        inicio = datetime.strptime(inicio_str, "%H:%M").time()
+        fim = datetime.strptime(fim_str, "%H:%M").time()
+
+        print(f"data: {data}, inicio: {inicio}, fim: {fim}")
+
+        # Get all grills
+        todas = Churrasqueira.query.all()
+        ids_todas = [c.id for c in todas]
+        
+        print(f"Total de churrasqueiras: {len(todas)}")
+        for c in todas:
+            print(f"  - ID {c.id}: {c.nome}")
+
+        # Find conflicting reservations
+        conflitos = Reserva.query.filter(
+            Reserva.data_reserva == data,
+            Reserva.status.in_(('ativa', 'pendente', 'paga')),
+            Reserva.horario_inicio < fim,
+            Reserva.horario_fim > inicio
+        ).all()
+
+        ids_ocupadas = [r.churrasqueira_id for r in conflitos]
+        
+        print(f"Reservas em conflito: {len(conflitos)}")
+        for r in conflitos:
+            print(f"  - Churrasqueira {r.churrasqueira_id}: {r.horario_inicio} - {r.horario_fim}")
+
+        # Filter available grills
+        ids_disponiveis = [cid for cid in ids_todas if cid not in ids_ocupadas]
+        
+        print(f"Churrasqueiras disponíveis (IDs): {ids_disponiveis}")
+
+        disponiveis = Churrasqueira.query.filter(
+            Churrasqueira.id.in_(ids_disponiveis)
+        ).all() if ids_disponiveis else []
+
+        resposta = {
+            "disponiveis": [
+                {"id": c.id, "nome": c.nome}
+                for c in disponiveis
+            ],
+            "total": len(disponiveis)
+        }
+        
+        print(f"Resposta: {resposta}")
+        print(f"=== FIM DEBUG ===\n")
+        
+        return jsonify(resposta)
+
+    except Exception as e:
+        print(f"ERRO em /disponiveis: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "erro": f"Erro ao buscar churrasqueiras disponíveis: {str(e)}"
         }), 500
