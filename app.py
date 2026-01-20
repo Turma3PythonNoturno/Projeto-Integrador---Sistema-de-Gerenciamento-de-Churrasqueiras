@@ -37,8 +37,15 @@ def create_app():
     )
 
     # Registro dos blueprints
+    # TODO: Migrar completamente para blueprints modulares
+    # Por enquanto, mantém routes.py legado + novos blueprints
     from app.routes import routes
     app.register_blueprint(routes)
+    
+    # Registrar novos blueprints modularizados
+    from app.blueprints import auth_bp, dashboard_bp
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(dashboard_bp)
     
     # Criar tabelas e inserir dados iniciais
     # No modo debug, o Flask executa o código duas vezes:
