@@ -35,8 +35,9 @@ def nova_reserva():
     
     # Pass logged user's CPF to template
     cpf_usuario = session.get('cpf', '')
+    is_admin = session.get('is_admin', False)
     cpf_formatado = ''
     if cpf_usuario and len(cpf_usuario) == 11:
         cpf_formatado = f"{cpf_usuario[:3]}.{cpf_usuario[3:6]}.{cpf_usuario[6:9]}-{cpf_usuario[9:]}"
     
-    return render_template('nova_reserva.html', cpf_usuario=cpf_usuario, cpf_formatado=cpf_formatado)
+    return render_template('nova_reserva.html', cpf_usuario=cpf_usuario, cpf_formatado=cpf_formatado, is_admin=is_admin)

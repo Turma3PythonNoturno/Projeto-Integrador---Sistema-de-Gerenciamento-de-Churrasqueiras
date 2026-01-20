@@ -127,9 +127,12 @@ def criar_reserva():
                 "mensagem": "Você deve selecionar uma churrasqueira."
             }), 400
         
+        # Get user info
+        is_admin = session.get('is_admin', False)
+        cpf_usuario = session.get('cpf')
+        
         # Auto-fill associado CPF with logged user's CPF
         cpf_form = dados.get('cpf_associado', '')
-        cpf_usuario = session.get('cpf')
         
         # Clean CPF (remove dots and dashes)
         if cpf_form:
@@ -141,6 +144,14 @@ def criar_reserva():
         
         if cpf_limpo:
             dados['cpf_associado'] = cpf_limpo
+        
+        # Validação: usuários normais só podem fazer reservas no seu próprio CPF
+        # Admin pode fazer reservas para qualquer CPF
+        if not is_admin and cpf_limpo != cpf_usuario:
+            return jsonify({
+                "sucesso": False,
+                "mensagem": "Você só pode fazer reservas no seu próprio CPF. Para fazer reservas para outro CPF, contate o administrador."
+            }), 403
         
         resultado = reserva_service.criar_reserva(dados)
         
