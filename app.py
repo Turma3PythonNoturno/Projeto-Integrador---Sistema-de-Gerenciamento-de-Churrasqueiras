@@ -42,10 +42,12 @@ def create_app():
     from app.routes import routes
     app.register_blueprint(routes)
     
-    # Registrar novos blueprints modularizados
-    from app.blueprints import auth_bp, dashboard_bp
+    # Registrar novos blueprints modularizados (Phase 2 refactoring)
+    from app.blueprints import auth_bp, dashboard_bp, reservas_bp, api_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(reservas_bp)
+    app.register_blueprint(api_bp)
     
     # Criar tabelas e inserir dados iniciais
     # No modo debug, o Flask executa o código duas vezes:
