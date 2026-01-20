@@ -66,7 +66,12 @@ def create_app():
             ja_inicializado = logins_existentes > 0
             
             if ja_inicializado:
-                # Já foi inicializado, apenas criar tabelas se necessário
+                # Já foi inicializado: garantir que o nome do associado admin esteja correto
+                admin_assoc = Associado.query.filter_by(cpf='12345678901').first()
+                if admin_assoc and admin_assoc.nome != 'Administrador':
+                    admin_assoc.nome = 'Administrador'
+                    db.session.commit()
+                # Apenas criar tabelas se necessário e sair
                 return app
             
             # Primeira inicialização - executar todo o processo
@@ -97,11 +102,11 @@ def create_app():
                 associado_teste = Associado(
                     codigo='001',
                     cpf='12345678901',
-                    nome='João da Silva Teste',
+                    nome='Administrador',
                     categoria='SERVIDOR',
                     situacao='FILIADO',
                     inadimplencia='NÃO',
-                    email='joao.teste@sint.com.br',
+                    email='admin@sint.com.br',
                     telefone='(62) 99999-9999',
                     ativo=True
                 )
