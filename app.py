@@ -36,13 +36,8 @@ def create_app():
         LoginSistema
     )
 
-    # Registro dos blueprints
-    # TODO: Migrar completamente para blueprints modulares
-    # Por enquanto, mantém routes.py legado + novos blueprints
-    from app.routes import routes
-    app.register_blueprint(routes)
-    
-    # Registrar novos blueprints modularizados (Phase 2 refactoring)
+    # Registro dos blueprints modularizados (Phase 2 - COMPLETO)
+    # routes.py legado foi completamente substituído por blueprints
     from app.blueprints import auth_bp, dashboard_bp, reservas_bp, api_bp, associados_bp, taxas_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
