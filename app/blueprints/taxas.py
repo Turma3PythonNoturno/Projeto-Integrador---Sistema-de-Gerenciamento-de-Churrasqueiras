@@ -3,8 +3,10 @@ Taxas Blueprint
 Handles fee/payment management
 """
 
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session, send_file
 from app.container import container
+from app.services.qrcode_service import QRCodeService
+from io import BytesIO
 
 taxas_bp = Blueprint('taxas', __name__)
 
@@ -177,3 +179,103 @@ def gerar_comprovante(taxa_id):
     except Exception as e:
         flash(f'Erro: {str(e)}', 'danger')
         return redirect(url_for('taxas.listar'))
+
+
+@taxas_bp.route('/api/taxa/qrcode/<int:taxa_id>')
+def obter_qrcode(taxa_id):
+    """API to get QR code for fee payment (PNG image)"""
+    try:
+        taxa = taxa_service.obter_por_id(taxa_id)
+        
+        if not taxa:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Taxa não encontrada'
+            }), 404
+        
+        # Buscar churrasqueira para pegar o preço correto
+        from app.models import db, Taxa
+        taxa_obj = Taxa.query.get(taxa_id)
+        
+        if not taxa_obj:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Taxa não encontrada'
+            }), 404
+        
+        # Gerar QR code
+        resultado = QRCodeService.gerar_qrcode_pix(
+            valor=taxa_obj.valor,
+            taxa_id=taxa_id,
+            descricao=f"Reserva de Churrasqueira - Taxa #{taxa_id}"
+        )
+        
+        if resultado.get('sucesso'):
+            # Retornar imagem PNG diretamente
+            return send_file(
+                BytesIO(resultado.get('qrcode_bytes')),
+                mimetype='image/png',
+                as_attachment=False,
+                download_name=f'qrcode_taxa_{taxa_id}.png'
+            )
+        else:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': resultado.get('mensagem')
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'Erro ao gerar QR code: {str(e)}'
+        }), 500
+
+
+@taxas_bp.route('/api/taxa/qrcode-json/<int:taxa_id>')
+def obter_qrcode_json(taxa_id):
+    """API to get QR code data as JSON (for modal display with base64 image)"""
+    try:
+        taxa = taxa_service.obter_por_id(taxa_id)
+        
+        if not taxa:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Taxa não encontrada'
+            }), 404
+        
+        from app.models import Taxa
+        taxa_obj = Taxa.query.get(taxa_id)
+        
+        if not taxa_obj:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': 'Taxa não encontrada'
+            }), 404
+        
+        # Gerar QR code
+        resultado = QRCodeService.gerar_qrcode_pix(
+            valor=taxa_obj.valor,
+            taxa_id=taxa_id,
+            descricao=f"Reserva de Churrasqueira - Taxa #{taxa_id}"
+        )
+        
+        if resultado.get('sucesso'):
+            return jsonify({
+                'sucesso': True,
+                'taxa_id': taxa_id,
+                'valor': str(taxa_obj.valor),
+                'descricao': f"Reserva de Churrasqueira",
+                'qrcode_base64': resultado.get('qrcode_base64'),
+                'pix_data': resultado.get('pix_data')
+            })
+        else:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': resultado.get('mensagem')
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': f'Erro ao gerar QR code: {str(e)}'
+        }), 500

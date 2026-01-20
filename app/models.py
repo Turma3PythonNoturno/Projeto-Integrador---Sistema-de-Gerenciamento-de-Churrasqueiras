@@ -240,10 +240,10 @@ class Churrasqueira(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=False)
-
     descricao = db.Column(db.String(255), nullable=True)
     capacidade = db.Column(db.Integer, nullable=True)
     foto_url = db.Column(db.String(255), nullable=True)
+    preco = db.Column(db.Numeric(10, 2), default=30.00, comment="Preço de reserva da churrasqueira")
 
     reservas = db.relationship("Reserva", backref="churrasqueira", lazy=True)
 

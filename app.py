@@ -71,6 +71,21 @@ def create_app():
                 if admin_assoc and admin_assoc.nome != 'Administrador':
                     admin_assoc.nome = 'Administrador'
                     db.session.commit()
+                
+                # Atualizar preços das churrasqueiras se não estiverem definidos
+                churrasqueiras = Churrasqueira.query.all()
+                for chur in churrasqueiras:
+                    if not chur.preco or float(chur.preco) == 0:
+                        if 'Bosque' in chur.nome:
+                            chur.preco = 60.00
+                            chur.capacidade = 60
+                        else:
+                            chur.preco = 30.00
+                        db.session.add(chur)
+                if churrasqueiras:
+                    db.session.commit()
+                    print("Preços das churrasqueiras atualizados!")
+                
                 # Apenas criar tabelas se necessário e sair
                 return app
             
@@ -78,16 +93,16 @@ def create_app():
             print("Banco de dados criado com sucesso!")
             print(f"Local do banco: {app.config['SQLALCHEMY_DATABASE_URI']}")
 
-            # Criar churrasqueiras padrão
+            # Criar churrasqueiras padrão com preços
             total_churrasqueiras = Churrasqueira.query.count()
             if total_churrasqueiras == 0:
                 print("Criando churrasqueiras padrão...")
                 lista = [
-                    Churrasqueira(nome="Churrasqueira Bosque"),
-                    Churrasqueira(nome="Churrasqueira Araguaia"),
-                    Churrasqueira(nome="Churrasqueira Asufesgo"),
-                    Churrasqueira(nome="Churrasqueira Sint-UFG"),
-                    Churrasqueira(nome="Churrasqueira Sint-Ifes")
+                    Churrasqueira(nome="Churrasqueira Bosque", preco=60.00, capacidade=60),
+                    Churrasqueira(nome="Churrasqueira Araguaia", preco=30.00, capacidade=20),
+                    Churrasqueira(nome="Churrasqueira Asufesgo", preco=30.00, capacidade=20),
+                    Churrasqueira(nome="Churrasqueira Sint-UFG", preco=30.00, capacidade=20),
+                    Churrasqueira(nome="Churrasqueira Sint-Ifes", preco=30.00, capacidade=20)
                 ]
                 db.session.add_all(lista)
                 db.session.commit()

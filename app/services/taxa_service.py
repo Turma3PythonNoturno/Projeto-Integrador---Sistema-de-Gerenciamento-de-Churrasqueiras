@@ -18,8 +18,14 @@ class TaxaService:
             return cpf
         return re.sub(r'[^\d]', '', cpf)
     
-    def gerar_taxa_reserva(self, reserva_id: int, cpf_associado: str) -> Dict:
-        """Gera uma nova taxa de reserva"""
+    def gerar_taxa_reserva(self, reserva_id: int, cpf_associado: str, valor: Optional[Decimal] = None) -> Dict:
+        """Gera uma nova taxa de reserva
+        
+        Args:
+            reserva_id: ID da reserva
+            cpf_associado: CPF do associado
+            valor: Valor opcional da taxa (usa padrão da config se não fornecido)
+        """
         try:
             # Verificar se já existe taxa para esta reserva
             taxa_existente = Taxa.query.filter_by(
@@ -33,9 +39,20 @@ class TaxaService:
                     'mensagem': 'Já existe uma taxa gerada para esta reserva'
                 }
             
+            # Se não foi fornecido valor, buscar o preço da churrasqueira
+            if valor is None:
+                from app.models import Reserva, Churrasqueira
+                reserva = Reserva.query.get(reserva_id)
+                if reserva and reserva.churrasqueira:
+                    valor = Decimal(str(reserva.churrasqueira.preco))
+                else:
+                    valor = Decimal(str(self.config.TAXA_RESERVA['valor']))
+            else:
+                valor = Decimal(str(valor))
+            
             # Criar nova taxa (limpar CPF para manter consistência com banco de associados)
             nova_taxa = Taxa(
-                valor=Decimal(str(self.config.TAXA_RESERVA['valor'])),
+                valor=valor,
                 tipo='reserva',
                 status='pendente',
                 data_vencimento=date.today() + timedelta(days=1),  # 24h para pagamento
