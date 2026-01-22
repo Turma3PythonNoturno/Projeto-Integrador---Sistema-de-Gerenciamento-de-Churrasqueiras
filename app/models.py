@@ -102,7 +102,7 @@ class Reserva(db.Model):
     observacoes = db.Column(db.Text, nullable=True, comment='Observações adicionais')
     
     # Relacionamentos
-    taxas = db.relationship('Taxa', backref='reserva_obj', lazy=True)
+    taxas = db.relationship('Taxa', backref='reserva_obj', lazy=True, cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<Reserva {self.nome} em {self.data_reserva} das {self.horario_inicio} às {self.horario_fim} da churrasqueira: {self.churrasqueira_id}>'

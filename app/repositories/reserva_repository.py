@@ -133,15 +133,24 @@ class ReservaRepository(IReservaRepository):
             return False, f"Erro ao verificar disponibilidade: {str(e)}"
     
     def cancelar_reserva(self, reserva_id: int) -> bool:
-        """Cancela uma reserva"""
+        """Cancela uma reserva e suas taxas associadas"""
         try:
+            from app.models import Taxa
+            
             reserva = ReservaModel.query.get(reserva_id)
-            if reserva and reserva.status == 'ativa':
+            if reserva:
+                # Cancelar taxas associadas (não deletar, apenas marcar como canceladas)
+                taxas = Taxa.query.filter_by(reserva_id=reserva_id).all()
+                for taxa in taxas:
+                    if taxa.status in ['pendente', 'vencido']:
+                        taxa.status = 'cancelado'
+                
+                # Cancelar a reserva
                 reserva.status = 'cancelada'
                 db.session.commit()
                 return True
             return False
-        except Exception:
+        except Exception as e:
             db.session.rollback()
             return False
     

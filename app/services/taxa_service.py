@@ -161,9 +161,14 @@ class TaxaService:
         taxas = query.all()
         return [taxa.to_dict() for taxa in taxas]
     
-    def listar_taxas_vencidas(self) -> List[Dict]:
-        """Lista taxas vencidas"""
+    def atualizar_taxas_vencidas(self) -> int:
+        """Atualiza automaticamente o status de taxas vencidas
+        
+        Returns:
+            Número de taxas atualizadas
+        """
         hoje = date.today()
+        atualizadas = 0
         
         # Buscar taxas pendentes com data de vencimento passada
         taxas_vencidas = Taxa.query.filter(
@@ -173,10 +178,18 @@ class TaxaService:
         
         # Atualizar status para vencido
         for taxa in taxas_vencidas:
-            taxa.marcar_como_vencida()
+            taxa.status = 'vencido'
+            atualizadas += 1
         
-        if taxas_vencidas:
+        if atualizadas > 0:
             db.session.commit()
+        
+        return atualizadas
+    
+    def listar_taxas_vencidas(self) -> List[Dict]:
+        """Lista taxas vencidas"""
+        # Atualizar status primeiro
+        self.atualizar_taxas_vencidas()
         
         # Retornar todas as taxas vencidas
         taxas_vencidas_todas = Taxa.query.filter_by(status='vencido').all()

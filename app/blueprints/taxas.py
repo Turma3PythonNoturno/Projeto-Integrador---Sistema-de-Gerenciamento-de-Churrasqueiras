@@ -28,6 +28,9 @@ def listar():
         flash('Acesso negado. Apenas administradores podem acessar esta página.', 'danger')
         return redirect(url_for('dashboard.inicio'))
     
+    # Atualizar status de taxas vencidas
+    taxa_service.atualizar_taxas_vencidas()
+    
     cpf_associado = request.args.get('cpf')  # Optional
     
     # List ALL fees, not just pending ones
@@ -36,20 +39,10 @@ def listar():
     else:
         taxas = taxa_service.listar_todas_taxas()
     
-    print(f"\n=== DEBUG TAXAS ===")
-    print(f"Total de taxas encontradas: {len(taxas)}")
-    print(f"Taxas: {taxas}")
-    
     # Calculate basic statistics for template
     total_recebido = sum(float(t.get('valor', 0)) for t in taxas if t.get('status') == 'pago')
     total_pendente = sum(float(t.get('valor', 0)) for t in taxas if t.get('status') == 'pendente')
     total_vencido = sum(float(t.get('valor', 0)) for t in taxas if t.get('status') == 'vencido')
-    
-    print(f"\n=== ESTATÍSTICAS CALCULADAS ===")
-    print(f"Total Recebido: R$ {total_recebido}")
-    print(f"Total Pendente: R$ {total_pendente}")
-    print(f"Total Vencido: R$ {total_vencido}")
-    print(f"Total de Taxas: {len(taxas)}")
     
     estatisticas = {
         'total_recebido': total_recebido,
@@ -57,10 +50,6 @@ def listar():
         'total_vencido': total_vencido,
         'total_taxas': len(taxas)
     }
-    
-    print(f"\n=== ANTES DO RENDER ===")
-    print(f"Estatísticas sendo enviadas: {estatisticas}")
-    print(f"Taxas sendo enviadas: {len(taxas)} itens")
     
     return render_template('taxas.html', 
                          taxas=taxas, 

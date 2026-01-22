@@ -15,7 +15,7 @@ class QRCodeService:
     """Serviço para gerar QR codes de pagamento Pix"""
     
     # Chave Pix da organização (exemplo fictício - atualizar com chave real)
-    PIX_KEY = "03230664108"  # Pode ser CPF, CNPJ, telefone, email ou chave aleatória
+    PIX_KEY = "fe53a1af-8958-45cd-a670-a1871d0798e6"  # Pode ser CPF, CNPJ, telefone, email ou chave aleatória
     MERCHANT_NAME = "SINT-IFESGO"
     MERCHANT_CITY = "Goiania"
     

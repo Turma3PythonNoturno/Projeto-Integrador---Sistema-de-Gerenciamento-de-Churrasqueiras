@@ -3,19 +3,32 @@
 {% block titulo %}Reservas - Sistema de Churrasqueira{% endblock %}
 
 {% block conteudo %}
-<h2 style="text-align: center; margin-bottom: 30px;">{{ titulo|default('Reservas da Churrasqueira') }}</h2>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <h2 style="margin: 0;">{{ titulo|default('Reservas da Churrasqueira') }}</h2>
+    <div style="display: flex; gap: 10px;">
+        {% if filtro_historico %}
+            <a href="{{ url_for('reservas.listar') }}" class="btn" style="padding: 8px 16px; background-color: #2c5234;">
+                <i class="fas fa-calendar-check"></i> Ver Reservas Ativas
+            </a>
+        {% else %}
+            <a href="{{ url_for('reservas.listar', historico='true') }}" class="btn btn-secondary" style="padding: 8px 16px; background-color: #6c757d;">
+                <i class="fas fa-history"></i> Ver Histórico
+            </a>
+        {% endif %}
+    </div>
+</div>
 
 <!-- Modal QR Code Pix -->
-<div id="modal-qrcode-lista" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); z-index: 1000; justify-content: center; align-items: center;">
-    <div style="background-color: white; padding: 40px; border-radius: 15px; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3); text-align: center;">
+<div id="modal-qrcode-lista" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); z-index: 1000; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; overflow-y: auto;">
+    <div style="background-color: white; padding: 25px 20px; border-radius: 15px; max-width: 420px; width: 90%; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3); text-align: center; margin: auto; max-height: 95vh; overflow-y: auto;">
         <button onclick="fecharModalQRCode()" style="float: right; background: none; border: none; font-size: 28px; cursor: pointer; color: #999;">&times;</button>
         
-        <h2 style="margin-top: 0; color: #2c5234;">Efetue o Pagamento via Pix</h2>
+        <h2 style="margin-top: 0; color: #2c5234; font-size: 22px;">Efetue o Pagamento via Pix</h2>
         
-        <div style="margin: 30px 0;">
-            <p style="color: #666; margin-bottom: 10px;"><strong>Escaneie o QR code com seu aplicativo de banco:</strong></p>
-            <div id="qrcode-img-lista" style="background: white; padding: 20px; border-radius: 10px; display: inline-block; border: 2px solid #e0e0e0;">
-                <img id="qrcode-image-lista" src="" alt="QR Code Pix" style="max-width: 300px; height: auto;">
+        <div style="margin: 20px 0;">
+            <p style="color: #666; margin-bottom: 10px; font-size: 14px;"><strong>Escaneie o QR code com seu aplicativo de banco:</strong></p>
+            <div id="qrcode-img-lista" style="background: white; padding: 12px; border-radius: 10px; display: inline-block; border: 2px solid #e0e0e0; max-width: 100%;">
+                <img id="qrcode-image-lista" src="" alt="QR Code Pix" style="width: 100%; max-width: 260px; height: auto; display: block;">
             </div>
         </div>
         
@@ -106,7 +119,13 @@
                 <td style="padding: 15px;">
                     <span
                         id="status-{{ reserva.to_dict().id }}"
-                        style="background-color: #28a745; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px;">
+                        class="status-badge status-{{ reserva.to_dict().status }}"
+                        style="padding: 5px 10px; border-radius: 15px; font-size: 12px; color: white;
+                        {% if reserva.to_dict().status == 'pendente' %}background-color: #ffc107;{% endif %}
+                        {% if reserva.to_dict().status == 'confirmada' or reserva.to_dict().status == 'ativa' %}background-color: #28a745;{% endif %}
+                        {% if reserva.to_dict().status == 'cancelada' %}background-color: #dc3545;{% endif %}
+                        {% if reserva.to_dict().status == 'expirada' %}background-color: #6c757d;{% endif %}
+                        {% if reserva.to_dict().status == 'concluida' %}background-color: #17a2b8;{% endif %}">
                         {{ reserva.to_dict().status_display }}
                     </span>
                 </td>
@@ -130,17 +149,28 @@
 </div>
 
 <div style="text-align: center; margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 10px;">
-    <p><strong>Total de reservas ativas:</strong> {{ reservas|length }}</p>
-    <p style="color: #666; font-size: 14px;">
-        Mostrando apenas reservas futuras e ativas
-    </p>
+    {% if filtro_historico %}
+        <p><strong>Total de reservas:</strong> {{ reservas|length }}</p>
+        <p style="color: #666; font-size: 14px;">
+            Mostrando apenas reservas canceladas, expiradas e concluídas
+        </p>
+    {% else %}
+        <p><strong>Total de reservas ativas:</strong> {{ reservas|length }}</p>
+        <p style="color: #666; font-size: 14px;">
+            Mostrando apenas reservas futuras e ativas
+        </p>
+    {% endif %}
 </div>
 
 {% else %}
 <div style="text-align: center; padding: 60px 20px; background-color: #f8f9fa; border-radius: 15px;">
     <h3 style="color: #6c757d;">Nenhuma reserva encontrada</h3>
     <p style="color: #6c757d; margin: 20px 0;">
-        Não há reservas ativas para os próximos dias.
+        {% if filtro_historico %}
+            Não há reservas no histórico.
+        {% else %}
+            Não há reservas ativas para os próximos dias.
+        {% endif %}
     </p>
     <a href="{{ url_for('dashboard.nova_reserva') }}" class="btn">
         Fazer Primeira Reserva

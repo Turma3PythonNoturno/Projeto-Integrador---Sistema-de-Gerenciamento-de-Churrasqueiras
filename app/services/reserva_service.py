@@ -73,6 +73,58 @@ class ReservaService:
         self._associado_service = AssociadoService()
         self._taxa_service = TaxaService()
     
+    def atualizar_status_expirados(self) -> int:
+        """
+        Atualiza automaticamente o status de reservas expiradas.
+        
+        - Pendentes com data+hora de INÍCIO passada → expirada
+        - Confirmadas/Ativas com data+hora de FIM passada → concluída
+        
+        Returns:
+            Número de reservas atualizadas
+        """
+        from app.models import Reserva, db
+        
+        agora = datetime.now()
+        atualizadas = 0
+        
+        # Buscar reservas pendentes ou confirmadas
+        reservas = Reserva.query.filter(
+            Reserva.status.in_(['pendente', 'confirmada', 'ativa'])
+        ).all()
+        
+        for reserva in reservas:
+            try:
+                # Combinar data + horário início
+                data_inicio = datetime.combine(
+                    reserva.data_reserva, 
+                    datetime.strptime(reserva.horario_inicio, '%H:%M').time()
+                )
+                
+                # Combinar data + horário fim
+                data_fim = datetime.combine(
+                    reserva.data_reserva, 
+                    datetime.strptime(reserva.horario_fim, '%H:%M').time()
+                )
+                
+                # Se pendente e já passou do início → expirada (não pagou a tempo)
+                if reserva.status == 'pendente' and data_inicio < agora:
+                    reserva.status = 'expirada'
+                    atualizadas += 1
+                
+                # Se confirmada/ativa e já passou do fim → concluída (reserva realizada)
+                elif reserva.status in ['confirmada', 'ativa'] and data_fim < agora:
+                    reserva.status = 'concluida'
+                    atualizadas += 1
+                        
+            except Exception as e:
+                continue
+        
+        if atualizadas > 0:
+            db.session.commit()
+        
+        return atualizadas
+    
     def criar_reserva(self, dados_reserva: Dict) -> Dict:
         """
         Cria uma nova reserva aplicando todas as regras de negócio do SINT-IFESGO.
@@ -208,17 +260,13 @@ class ReservaService:
         # 9. Gerar taxa de reserva
         reserva_id = resultado_reserva['reserva']['id']
         if cpf_associado:
-            print(f"\n>>> Gerando taxa para reserva ID: {reserva_id}, CPF: {cpf_associado}")
             resultado_taxa = self._taxa_service.gerar_taxa_reserva(reserva_id, cpf_associado)
-            print(f">>> Resultado da taxa: {resultado_taxa}\n")
         else:
             resultado_taxa = {'sucesso': False, 'mensagem': 'CPF do associado não informado'}
-            print(f">>> ERRO: CPF não informado para gerar taxa")
         
         if not resultado_taxa['sucesso']:
             # Se falhar na geração da taxa, podemos decidir se cancela a reserva ou não
             # Por ora, vamos manter a reserva mas informar sobre a taxa
-            print(f">>> AVISO: Falha ao gerar taxa - {resultado_taxa.get('mensagem')}")
             pass
         
         # 10. Retornar resultado completo
@@ -300,8 +348,14 @@ class ReservaService:
                 'horarios_ocupados': []
             }
     
-    def cancelar_reserva(self, reserva_id: int, email_confirmacao: Optional[str] = None) -> Dict:
-        """Cancela uma reserva com validações"""
+    def cancelar_reserva(self, reserva_id: int, email_confirmacao: Optional[str] = None, is_admin: bool = False) -> Dict:
+        """Cancela uma reserva com validações
+        
+        Args:
+            reserva_id: ID da reserva
+            email_confirmacao: Email para confirmação (ignorado se admin)
+            is_admin: Se é admin (pula algumas validações)
+        """
         
         # Buscar reserva
         reserva_data = self._repositorio.buscar_por_id(reserva_id)
@@ -311,42 +365,43 @@ class ReservaService:
                 'mensagem': 'Reserva não encontrada'
             }
         
-        # Verificar se está ativa
-        if reserva_data['status'] != 'ativa':
+        # Verificar se pode ser cancelada
+        if reserva_data['status'] in ['cancelada', 'concluida', 'expirada']:
             return {
                 'sucesso': False,
-                'mensagem': 'Reserva já foi cancelada'
+                'mensagem': 'Esta reserva não pode mais ser cancelada'
             }
         
-        # Verificar se pode ser cancelada (24h de antecedência)
-        try:
-            data_reserva = datetime.strptime(reserva_data['data_reserva_iso'], '%Y-%m-%d').date()
-            horario_inicio = datetime.strptime(reserva_data['horario_inicio'], '%H:%M').time()
-            
-            agora = datetime.now()
-            data_hora_reserva = datetime.combine(data_reserva, horario_inicio)
-            
-            if data_hora_reserva <= agora:
+        # Verificar se pode ser cancelada (24h de antecedência) - Admin pode pular
+        if not is_admin:
+            try:
+                data_reserva = datetime.strptime(reserva_data['data_reserva_iso'], '%Y-%m-%d').date()
+                horario_inicio = datetime.strptime(reserva_data['horario_inicio'], '%H:%M').time()
+                
+                agora = datetime.now()
+                data_hora_reserva = datetime.combine(data_reserva, horario_inicio)
+                
+                if data_hora_reserva <= agora:
+                    return {
+                        'sucesso': False,
+                        'mensagem': 'Não é possível cancelar reservas que já começaram'
+                    }
+                
+                diferenca = data_hora_reserva - agora
+                if diferenca.total_seconds() < 24 * 3600:  # 24 horas
+                    return {
+                        'sucesso': False,
+                        'mensagem': 'Cancelamento deve ser feito com pelo menos 24h de antecedência'
+                    }
+                
+            except Exception:
                 return {
                     'sucesso': False,
-                    'mensagem': 'Não é possível cancelar reservas que já começaram'
+                    'mensagem': 'Erro ao validar horário da reserva'
                 }
-            
-            diferenca = data_hora_reserva - agora
-            if diferenca.total_seconds() < 24 * 3600:  # 24 horas
-                return {
-                    'sucesso': False,
-                    'mensagem': 'Cancelamento deve ser feito com pelo menos 24h de antecedência'
-                }
-            
-        except Exception:
-            return {
-                'sucesso': False,
-                'mensagem': 'Erro ao validar horário da reserva'
-            }
         
-        # Validar email se fornecido
-        if email_confirmacao and reserva_data.get('email'):
+        # Validar email se fornecido (não obrigatório para admin)
+        if email_confirmacao and reserva_data.get('email') and not is_admin:
             if email_confirmacao.lower().strip() != reserva_data['email'].lower().strip():
                 return {
                     'sucesso': False,
