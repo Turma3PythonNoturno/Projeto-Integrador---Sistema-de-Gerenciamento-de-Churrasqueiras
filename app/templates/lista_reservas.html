@@ -82,6 +82,7 @@
                 <th style="padding: 15px; text-align: left;">Horário</th>
                 <th style="padding: 15px; text-align: left;">Responsável</th>
                 <th style="padding: 15px; text-align: left;">Convidados</th>
+                <th style="padding: 15px; text-align: left;">Valor da Locação</th>
                 <th style="padding: 15px; text-align: left;">Contato</th>
                 <th style="padding: 15px; text-align: left;">Status</th>
                 <th style="padding: 15px; text-align: left;">Ações</th>
@@ -107,6 +108,9 @@
                 </td>
                 <td style="padding: 15px;">
                     {{ reserva.numero_convidados }} pessoas
+                </td>
+                <td style="padding: 15px;">
+                    <strong style="color: #28a745; font-size: 16px;">{{ reserva.to_dict().preco_formatado }}</strong>
                 </td>
                 <td style="padding: 15px;">
                     {% if reserva.email %}

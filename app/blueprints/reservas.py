@@ -8,6 +8,7 @@ from datetime import datetime
 from app.container import container
 from app.models import Reserva, Churrasqueira
 from app.utils import CPFUtils
+from datetime import datetime
 
 reservas_bp = Blueprint('reservas', __name__)
 
@@ -196,9 +197,12 @@ def criar_reserva():
                 "mensagem": "Você deve selecionar uma churrasqueira."
             }), 400
         
+        # Get user info
+        is_admin = session.get('is_admin', False)
+        cpf_usuario = session.get('cpf')
+        
         # Auto-fill associado CPF with logged user's CPF
         cpf_form = dados.get('cpf_associado', '')
-        cpf_usuario = session.get('cpf')
         
         # Clean CPF (remove dots and dashes)
         if cpf_form:
@@ -210,6 +214,14 @@ def criar_reserva():
         
         if cpf_limpo:
             dados['cpf_associado'] = cpf_limpo
+        
+        # Validação: usuários normais só podem fazer reservas no seu próprio CPF
+        # Admin pode fazer reservas para qualquer CPF
+        if not is_admin and cpf_limpo != cpf_usuario:
+            return jsonify({
+                "sucesso": False,
+                "mensagem": "Você só pode fazer reservas no seu próprio CPF. Para fazer reservas para outro CPF, contate o administrador."
+            }), 403
         
         resultado = reserva_service.criar_reserva(dados)
         
@@ -328,4 +340,57 @@ def obter_detalhes_reserva(reserva_id):
         return jsonify({
             'sucesso': False,
             'mensagem': f'Erro interno: {str(e)}'
+        }), 500
+
+
+@reservas_bp.route('/reservas/disponiveis', methods=['GET'])
+def churrasqueiras_disponiveis():
+    """API to get available grills for a given date and time range"""
+    try:
+        data_str = request.args.get("data")
+        inicio_str = request.args.get("inicio")
+        fim_str = request.args.get("fim")
+
+        if not data_str or not inicio_str or not fim_str:
+            return jsonify({"erro": "Parâmetros insuficientes"}), 400
+
+        # Convert strings to proper formats
+        data = datetime.strptime(data_str, "%Y-%m-%d").date()
+        inicio = datetime.strptime(inicio_str, "%H:%M").time()
+        fim = datetime.strptime(fim_str, "%H:%M").time()
+
+        # Get all grills
+        todas = Churrasqueira.query.all()
+        ids_todas = [c.id for c in todas]
+
+        # Find conflicting reservations
+        conflitos = Reserva.query.filter(
+            Reserva.data_reserva == data,
+            Reserva.status.in_(('ativa', 'pendente', 'paga')),
+            Reserva.horario_inicio < fim,
+            Reserva.horario_fim > inicio
+        ).all()
+
+        ids_ocupadas = [r.churrasqueira_id for r in conflitos]
+
+        # Filter available grills
+        ids_disponiveis = [cid for cid in ids_todas if cid not in ids_ocupadas]
+
+        disponiveis = Churrasqueira.query.filter(
+            Churrasqueira.id.in_(ids_disponiveis)
+        ).all() if ids_disponiveis else []
+
+        resposta = {
+            "disponiveis": [
+                {"id": c.id, "nome": c.nome}
+                for c in disponiveis
+            ],
+            "total": len(disponiveis)
+        }
+        
+        return jsonify(resposta)
+
+    except Exception as e:
+        return jsonify({
+            "erro": f"Erro ao buscar churrasqueiras disponíveis: {str(e)}"
         }), 500
